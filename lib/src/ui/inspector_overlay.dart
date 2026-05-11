@@ -16,7 +16,10 @@ Color _statusColor(NetworkStatus s) {
 /// Place this as the outermost widget in your `MaterialApp` builder:
 ///
 /// ```dart
-/// builder: (context, child) => NetworkInspectorOverlay(child: child!),
+/// builder: (context, child) => NetworkInspectorOverlay(
+///   navigatorKey: Get.key, // pass your app's navigator key
+///   child: child!,
+/// ),
 /// ```
 ///
 /// Set [show] to `false` to hide the button (e.g. via a feature flag).
@@ -26,10 +29,16 @@ class NetworkInspectorOverlay extends StatefulWidget {
   /// Whether to show the inspector button. Has no effect in release builds.
   final bool show;
 
+  /// The navigator key used to push the inspector screen.
+  /// Required when the overlay is placed above the Navigator (e.g. in
+  /// MaterialApp's builder). Pass your app's [navigatorKey] or `Get.key`.
+  final GlobalKey<NavigatorState>? navigatorKey;
+
   const NetworkInspectorOverlay({
     super.key,
     required this.child,
     this.show = true,
+    this.navigatorKey,
   });
 
   @override
@@ -76,8 +85,11 @@ class _NetworkInspectorOverlayState extends State<NetworkInspectorOverlay> {
             child: _InspectorButton(
               count: NetworkLogger.instance.logs.length,
               status: NetworkLogger.instance.networkStatus,
-              onTap: () => Navigator.of(context, rootNavigator: true)
-                  .push(InspectorListScreen.route()),
+              onTap: () {
+                final nav = widget.navigatorKey?.currentState ??
+                    Navigator.of(context, rootNavigator: true);
+                nav.push(InspectorListScreen.route());
+              },
             ),
           ),
         ),
