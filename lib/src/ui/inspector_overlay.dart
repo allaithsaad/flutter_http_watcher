@@ -5,9 +5,12 @@ import 'inspector_list.dart';
 
 Color _statusColor(NetworkStatus s) {
   switch (s) {
-    case NetworkStatus.online: return const Color(0xFF4CAF50);
-    case NetworkStatus.offline: return const Color(0xFFF44336);
-    case NetworkStatus.unknown: return const Color(0xFF9E9E9E);
+    case NetworkStatus.online:
+      return const Color(0xFF4CAF50);
+    case NetworkStatus.offline:
+      return const Color(0xFFF44336);
+    case NetworkStatus.unknown:
+      return const Color(0xFF9E9E9E);
   }
 }
 
