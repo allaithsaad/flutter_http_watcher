@@ -1,5 +1,9 @@
+import 'dart:async';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import '../model/network_log.dart';
+
+enum NetworkStatus { online, offline, unknown }
 
 /// Central store for all captured network logs.
 ///
@@ -7,12 +11,18 @@ import '../model/network_log.dart';
 /// response. Wrap your app with [NetworkInspectorOverlay] to display the
 /// floating debug button.
 class NetworkLogger extends ChangeNotifier {
-  NetworkLogger._();
+  NetworkLogger._() {
+    if (kDebugMode && !kIsWeb) _startConnectivityPolling();
+  }
 
   static final NetworkLogger instance = NetworkLogger._();
 
   final List<NetworkLog> _logs = [];
   int _counter = 0;
+  Timer? _connectivityTimer;
+
+  /// Current network connectivity status.
+  NetworkStatus networkStatus = NetworkStatus.unknown;
 
   /// Set to `false` to disable logging without removing the overlay.
   /// Automatically disabled in release builds.
@@ -23,6 +33,31 @@ class NetworkLogger extends ChangeNotifier {
 
   /// All captured logs, newest first.
   List<NetworkLog> get logs => List.unmodifiable(_logs);
+
+  void _startConnectivityPolling() {
+    _checkConnectivity();
+    _connectivityTimer = Timer.periodic(
+      const Duration(seconds: 5),
+      (_) => _checkConnectivity(),
+    );
+  }
+
+  Future<void> _checkConnectivity() async {
+    try {
+      final result = await InternetAddress.lookup('google.com')
+          .timeout(const Duration(seconds: 3));
+      final isOnline = result.isNotEmpty && result[0].rawAddress.isNotEmpty;
+      _updateStatus(isOnline ? NetworkStatus.online : NetworkStatus.offline);
+    } catch (_) {
+      _updateStatus(NetworkStatus.offline);
+    }
+  }
+
+  void _updateStatus(NetworkStatus status) {
+    if (networkStatus == status) return;
+    networkStatus = status;
+    notifyListeners();
+  }
 
   /// Log a completed HTTP request/response pair.
   ///
@@ -59,5 +94,11 @@ class NetworkLogger extends ChangeNotifier {
   void clear() {
     _logs.clear();
     notifyListeners();
+  }
+
+  /// Stop the connectivity polling timer.
+  void dispose() {
+    _connectivityTimer?.cancel();
+    super.dispose();
   }
 }

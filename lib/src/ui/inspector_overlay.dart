@@ -3,6 +3,14 @@ import 'package:flutter/material.dart';
 import '../core/network_logger.dart';
 import 'inspector_list.dart';
 
+Color _statusColor(NetworkStatus s) {
+  switch (s) {
+    case NetworkStatus.online: return const Color(0xFF4CAF50);
+    case NetworkStatus.offline: return const Color(0xFFF44336);
+    case NetworkStatus.unknown: return const Color(0xFF9E9E9E);
+  }
+}
+
 /// Wraps [child] and adds a draggable floating inspector button in debug mode.
 ///
 /// Place this as the outermost widget in your `MaterialApp` builder:
@@ -67,6 +75,7 @@ class _NetworkInspectorOverlayState extends State<NetworkInspectorOverlay> {
             }),
             child: _InspectorButton(
               count: NetworkLogger.instance.logs.length,
+              status: NetworkLogger.instance.networkStatus,
               onTap: () => Navigator.of(context, rootNavigator: true)
                   .push(InspectorListScreen.route()),
             ),
@@ -79,9 +88,14 @@ class _NetworkInspectorOverlayState extends State<NetworkInspectorOverlay> {
 
 class _InspectorButton extends StatelessWidget {
   final int count;
+  final NetworkStatus status;
   final VoidCallback onTap;
 
-  const _InspectorButton({required this.count, required this.onTap});
+  const _InspectorButton({
+    required this.count,
+    required this.status,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -97,6 +111,15 @@ class _InspectorButton extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: _statusColor(status),
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 5),
               const Icon(Icons.network_check_rounded,
                   color: Colors.white, size: 18),
               if (count > 0) ...[
