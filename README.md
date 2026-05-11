@@ -7,13 +7,14 @@ Shows a draggable floating button that opens a full request/response viewer — 
 
 ## Features
 
-- Draggable floating button showing live request count
+- Draggable floating button with live request count
+- **Live connectivity dot** — green (online) · red (offline) · grey (unknown)
 - Color-coded by HTTP method (GET / POST / PUT / DELETE)
 - Color-coded status codes (green 2xx · orange 4xx · red 5xx)
 - Full request & response viewer with JSON pretty-printing
 - One-tap copy to clipboard
-- Hide button from within the inspector
-- Built-in `NetworkInspectorHttpClient` for automatic logging
+- Pause / resume logging from within the inspector
+- Built-in `NetworkInspectorHttpClient` for the `http` package
 - Manual `logRequest` API for any HTTP client
 - **Zero overhead in release builds** — logging and UI are stripped automatically
 
@@ -35,16 +36,29 @@ dependencies:
 ```dart
 import 'package:network_inspector/network_inspector.dart';
 
-// Inside MaterialApp / GetMaterialApp builder:
+// Inside MaterialApp builder:
 builder: (context, child) {
   return NetworkInspectorOverlay(
-    show: true,  // set false to hide (e.g. via a feature flag)
+    show: true, // set false to hide (e.g. via a feature flag)
     child: child!,
   );
 },
 ```
 
-### 2a — Automatic logging (http package)
+> **Using GetX or any setup where the overlay sits above the Navigator?**  
+> Pass `navigatorKey` so the inspector screen can be pushed correctly:
+>
+> ```dart
+> builder: (context, child) {
+>   return NetworkInspectorOverlay(
+>     show: true,
+>     navigatorKey: Get.key, // or your own GlobalKey<NavigatorState>
+>     child: child!,
+>   );
+> },
+> ```
+
+### 2a — Automatic logging (`http` package)
 
 ```dart
 import 'package:network_inspector/network_inspector.dart';
@@ -52,6 +66,12 @@ import 'package:network_inspector/network_inspector.dart';
 final client = NetworkInspectorHttpClient();
 final response = await client.get(Uri.parse('https://api.example.com/users'));
 // Every request/response is logged automatically.
+```
+
+Or wrap an existing client:
+
+```dart
+final client = NetworkInspectorHttpClient(myExistingClient);
 ```
 
 ### 2b — Manual logging (any HTTP client)
@@ -71,14 +91,42 @@ NetworkLogger.instance.logRequest(
 
 ---
 
+## Inspector screen
+
+Open by tapping the floating button. From the app bar you can:
+
+| Button | Action |
+|--------|--------|
+| Pause / Play | Stop or resume capturing new requests |
+| Delete | Clear all logged requests |
+
+Tap any row to see the full request headers, body, response body, status code, and duration.
+
+---
+
+## Connectivity indicator
+
+The floating button shows a small dot reflecting the current network status, checked every 5 seconds:
+
+| Color | Meaning |
+|-------|---------|
+| 🟢 Green | Device is online |
+| 🔴 Red | Device is offline |
+| ⚪ Grey | Status not yet determined |
+
+---
+
 ## Configuration
 
 ```dart
-// Show/hide button via a constant:
+// Show/hide the button via a constant:
 NetworkInspectorOverlay(show: AppConstants.showNetworkInspector, child: child!)
 
-// Disable logging at runtime (e.g. from a settings screen):
+// Disable logging at runtime:
 NetworkLogger.instance.enabled = false;
+
+// Toggle logging on/off:
+NetworkLogger.instance.toggleEnabled();
 
 // Change maximum entries kept in memory (default: 300):
 NetworkLogger.instance.maxEntries = 100;
