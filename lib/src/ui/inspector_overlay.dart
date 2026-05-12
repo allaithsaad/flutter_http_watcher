@@ -69,7 +69,7 @@ class _NetworkInspectorOverlayState extends State<NetworkInspectorOverlay> {
 
   @override
   Widget build(BuildContext context) {
-    if (!kDebugMode || !widget.show || !NetworkLogger.instance.enabled) {
+    if (!kDebugMode || !widget.show) {
       return widget.child;
     }
 
