@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../core/network_logger.dart';
 import 'inspector_list.dart';
@@ -14,7 +13,7 @@ Color _statusColor(NetworkStatus s) {
   }
 }
 
-/// Wraps [child] and adds a draggable floating inspector button in debug mode.
+/// Wraps [child] and adds a draggable floating inspector button.
 ///
 /// Place this as the outermost widget in your `MaterialApp` builder:
 ///
@@ -29,7 +28,7 @@ Color _statusColor(NetworkStatus s) {
 class HttpWatcherOverlay extends StatefulWidget {
   final Widget child;
 
-  /// Whether to show the inspector button. Has no effect in release builds.
+  /// Whether to show the inspector button.
   final bool show;
 
   /// The navigator key used to push the inspector screen.
@@ -68,7 +67,7 @@ class _HttpWatcherOverlayState extends State<HttpWatcherOverlay> {
 
   @override
   Widget build(BuildContext context) {
-    if (!kDebugMode || !widget.show) {
+    if (!widget.show) {
       return widget.child;
     }
 

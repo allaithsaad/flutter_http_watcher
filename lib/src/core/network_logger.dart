@@ -71,7 +71,7 @@ class HttpWatcherLogger extends ChangeNotifier {
     required String responseBody,
     required DateTime startTime,
   }) {
-    if (!kDebugMode || !enabled) return;
+    if (!enabled) return;
     _logs.insert(
       0,
       NetworkLog(

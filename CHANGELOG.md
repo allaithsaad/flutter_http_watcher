@@ -1,3 +1,8 @@
+## 1.0.4
+
+* Remove debug-only restriction — overlay and logging now work in all build modes.
+* Visibility is controlled solely by the `show` parameter on `HttpWatcherOverlay`.
+
 ## 1.0.3
 
 * Resize demo GIF display size in README.
@@ -23,4 +28,4 @@
 * Share button in the detail screen — shares the full request/response as plain text.
 * Copy button on every section (summary, headers, body).
 * `navigatorKey` is required — works correctly above the Navigator (GetX, go_router, etc.).
-* Debug-only: zero overhead in release builds.
+* `show` flag controls visibility.

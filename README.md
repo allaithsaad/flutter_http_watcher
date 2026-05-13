@@ -1,7 +1,7 @@
 # flutter_http_watcher
 
 A lightweight in-app network inspector for Flutter.  
-Shows a draggable floating button that opens a full request/response viewer — no external dependencies beyond `http`, debug-only, zero setup.
+Shows a draggable floating button that opens a full request/response viewer — no external dependencies beyond `http`, zero setup.
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/allaithsaad/flutter_http_watcher/main/doc/demo.gif" width="250"/>
@@ -20,7 +20,7 @@ Shows a draggable floating button that opens a full request/response viewer — 
 - Pause / resume logging from within the inspector
 - Built-in `HttpWatcherClient` for the `http` package
 - Manual `logRequest` API for any HTTP client
-- **Zero overhead in release builds** — logging and UI are stripped automatically
+- Controlled entirely by the `show` flag — use in debug, release, or staging
 
 ---
 
@@ -28,7 +28,7 @@ Shows a draggable floating button that opens a full request/response viewer — 
 
 ```yaml
 dependencies:
-  flutter_http_watcher: ^1.0.0
+  flutter_http_watcher: ^1.0.4
 ```
 
 ---
@@ -142,13 +142,6 @@ HttpWatcherLogger.instance.toggleEnabled();
 // Change maximum entries kept in memory (default: 300):
 HttpWatcherLogger.instance.maxEntries = 100;
 ```
-
----
-
-## Release builds
-
-The overlay widget returns `child` unchanged and `logRequest` is a no-op when
-`kDebugMode` is `false`. No inspector code runs in production.
 
 ---
 
