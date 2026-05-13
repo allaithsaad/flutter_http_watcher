@@ -1,3 +1,7 @@
+## 1.0.3
+
+* Resize demo GIF display size in README.
+
 ## 1.0.2
 
 * Fix demo GIF not showing on pub.dev (use absolute raw GitHub URL).

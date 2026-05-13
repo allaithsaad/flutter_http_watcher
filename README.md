@@ -3,7 +3,9 @@
 A lightweight in-app network inspector for Flutter.  
 Shows a draggable floating button that opens a full request/response viewer — no external dependencies beyond `http`, debug-only, zero setup.
 
-![Demo](https://raw.githubusercontent.com/allaithsaad/flutter_http_watcher/main/doc/demo.gif)
+<p align="center">
+  <img src="https://raw.githubusercontent.com/allaithsaad/flutter_http_watcher/main/doc/demo.gif" width="250"/>
+</p>
 
 ---
 
