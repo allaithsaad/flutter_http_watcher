@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../core/network_logger.dart';
+import 'watcher_theme.dart';
 
 class InspectorStatsScreen extends StatelessWidget {
   const InspectorStatsScreen({super.key});
@@ -13,10 +14,11 @@ class InspectorStatsScreen extends StatelessWidget {
 
     if (logs.isEmpty) {
       return Scaffold(
-        backgroundColor: const Color(0xFF0D0D1A),
+        backgroundColor: WatcherTheme.background,
         appBar: _appBar(),
-        body: const Center(
-          child: Text('No requests yet', style: TextStyle(color: Colors.white38)),
+        body: Center(
+          child: Text('No requests yet',
+              style: TextStyle(color: WatcherTheme.textHint)),
         ),
       );
     }
@@ -26,8 +28,10 @@ class InspectorStatsScreen extends StatelessWidget {
     final clientErr = logs.where((l) => l.isClientError).length;
     final serverErr = logs.where((l) => l.isServerError).length;
     final failed = logs.where((l) => l.isFailed).length;
-    final avgDuration = logs.map((l) => l.durationMs).reduce((a, b) => a + b) ~/ total;
-    final slowest = [...logs]..sort((a, b) => b.durationMs.compareTo(a.durationMs));
+    final avgDuration =
+        logs.map((l) => l.durationMs).reduce((a, b) => a + b) ~/ total;
+    final slowest = [...logs]
+      ..sort((a, b) => b.durationMs.compareTo(a.durationMs));
 
     final methodCounts = <String, int>{};
     for (final log in logs) {
@@ -43,7 +47,7 @@ class InspectorStatsScreen extends StatelessWidget {
       ..sort((a, b) => b.value.compareTo(a.value));
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0D0D1A),
+      backgroundColor: WatcherTheme.background,
       appBar: _appBar(),
       body: ListView(
         padding: const EdgeInsets.all(16),
@@ -51,9 +55,9 @@ class InspectorStatsScreen extends StatelessWidget {
           _sectionTitle('Overview'),
           const SizedBox(height: 8),
           Row(children: [
-            _statCard('Total', '$total', Colors.white70),
+            _statCard('Total', '$total', WatcherTheme.textSecond),
             const SizedBox(width: 8),
-            _statCard('Avg Duration', '${avgDuration}ms', Colors.white70),
+            _statCard('Avg Duration', '${avgDuration}ms', WatcherTheme.textSecond),
           ]),
           const SizedBox(height: 8),
           Row(children: [
@@ -71,46 +75,48 @@ class InspectorStatsScreen extends StatelessWidget {
           _sectionTitle('By Method'),
           const SizedBox(height: 8),
           _card(Column(
-            children: methodCounts.entries.map((e) => _barRow(
-              e.key,
-              e.value,
-              total,
-              _methodColor(e.key),
-            )).toList(),
+            children: methodCounts.entries
+                .map((e) => _barRow(e.key, e.value, total, _methodColor(e.key)))
+                .toList(),
           )),
           const SizedBox(height: 16),
           _sectionTitle('Top Hosts'),
           const SizedBox(height: 8),
           _card(Column(
-            children: topHosts.take(5).map((e) => _barRow(
-              e.key,
-              e.value,
-              total,
-              Colors.white54,
-            )).toList(),
+            children: topHosts
+                .take(5)
+                .map((e) => _barRow(e.key, e.value, total, WatcherTheme.textSecond))
+                .toList(),
           )),
           const SizedBox(height: 16),
           _sectionTitle('Slowest Requests'),
           const SizedBox(height: 8),
           _card(Column(
-            children: slowest.take(5).map((log) => Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Row(children: [
-                Text(log.method,
-                    style: TextStyle(
-                        color: _methodColor(log.method),
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold)),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(Uri.tryParse(log.url)?.path ?? log.url,
-                      style: const TextStyle(color: Colors.white, fontSize: 12),
-                      overflow: TextOverflow.ellipsis),
-                ),
-                Text('${log.durationMs}ms',
-                    style: const TextStyle(color: Colors.orange, fontSize: 12)),
-              ]),
-            )).toList(),
+            children: slowest
+                .take(5)
+                .map((log) => Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(children: [
+                        Text(log.method,
+                            style: TextStyle(
+                                color: _methodColor(log.method),
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold)),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            Uri.tryParse(log.url)?.path ?? log.url,
+                            style: TextStyle(
+                                color: WatcherTheme.textPrimary, fontSize: 12),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        Text('${log.durationMs}ms',
+                            style: const TextStyle(
+                                color: Colors.orange, fontSize: 12)),
+                      ]),
+                    ))
+                .toList(),
           )),
           const SizedBox(height: 32),
         ],
@@ -119,19 +125,22 @@ class InspectorStatsScreen extends StatelessWidget {
   }
 
   AppBar _appBar() => AppBar(
-        backgroundColor: const Color(0xFF1A1A2E),
-        title: const Text('Stats', style: TextStyle(color: Colors.white)),
-        iconTheme: const IconThemeData(color: Colors.white),
+        backgroundColor: WatcherTheme.surface,
+        title: Text('Stats',
+            style: TextStyle(color: WatcherTheme.textPrimary)),
+        iconTheme: IconThemeData(color: WatcherTheme.iconColor),
       );
 
   Widget _sectionTitle(String title) => Text(title,
-      style: const TextStyle(
-          color: Colors.white70, fontSize: 13, fontWeight: FontWeight.bold));
+      style: TextStyle(
+          color: WatcherTheme.textSecond,
+          fontSize: 13,
+          fontWeight: FontWeight.bold));
 
   Widget _card(Widget child) => Container(
         width: double.infinity,
         decoration: BoxDecoration(
-          color: const Color(0xFF1A1A2E),
+          color: WatcherTheme.surface,
           borderRadius: BorderRadius.circular(10),
         ),
         padding: const EdgeInsets.all(12),
@@ -141,18 +150,23 @@ class InspectorStatsScreen extends StatelessWidget {
   Widget _statCard(String label, String value, Color color) => Expanded(
         child: Container(
           decoration: BoxDecoration(
-            color: const Color(0xFF1A1A2E),
+            color: WatcherTheme.surface,
             borderRadius: BorderRadius.circular(10),
           ),
           padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(value,
-                style: TextStyle(
-                    color: color, fontSize: 22, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 2),
-            Text(label,
-                style: const TextStyle(color: Colors.white38, fontSize: 11)),
-          ]),
+          child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(value,
+                    style: TextStyle(
+                        color: color,
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold)),
+                const SizedBox(height: 2),
+                Text(label,
+                    style: TextStyle(
+                        color: WatcherTheme.textHint, fontSize: 11)),
+              ]),
         ),
       );
 
@@ -164,7 +178,8 @@ class InspectorStatsScreen extends StatelessWidget {
         SizedBox(
           width: 72,
           child: Text(label,
-              style: const TextStyle(color: Colors.white70, fontSize: 12),
+              style:
+                  TextStyle(color: WatcherTheme.textSecond, fontSize: 12),
               overflow: TextOverflow.ellipsis),
         ),
         const SizedBox(width: 8),
@@ -173,7 +188,7 @@ class InspectorStatsScreen extends StatelessWidget {
             borderRadius: BorderRadius.circular(4),
             child: LinearProgressIndicator(
               value: pct,
-              backgroundColor: const Color(0xFF2A2A3E),
+              backgroundColor: WatcherTheme.divider,
               valueColor: AlwaysStoppedAnimation(color),
               minHeight: 8,
             ),
@@ -181,18 +196,18 @@ class InspectorStatsScreen extends StatelessWidget {
         ),
         const SizedBox(width: 8),
         Text('$count',
-            style: const TextStyle(color: Colors.white54, fontSize: 12)),
+            style: TextStyle(color: WatcherTheme.textHint, fontSize: 12)),
       ]),
     );
   }
 
   Color _methodColor(String method) {
     switch (method) {
-      case 'GET': return const Color(0xFF61AFEF);
-      case 'POST': return const Color(0xFF98C379);
-      case 'PUT': return const Color(0xFFE5C07B);
+      case 'GET':    return const Color(0xFF61AFEF);
+      case 'POST':   return const Color(0xFF98C379);
+      case 'PUT':    return const Color(0xFFE5C07B);
       case 'DELETE': return const Color(0xFFE06C75);
-      default: return Colors.white70;
+      default:       return WatcherTheme.textSecond;
     }
   }
 }
@@ -209,17 +224,19 @@ class _SuccessBar extends StatelessWidget {
       Row(children: [
         Text('${(pct * 100).toStringAsFixed(1)}%',
             style: const TextStyle(
-                color: Colors.green, fontSize: 20, fontWeight: FontWeight.bold)),
+                color: Colors.green,
+                fontSize: 20,
+                fontWeight: FontWeight.bold)),
         const Spacer(),
         Text('$success / $total',
-            style: const TextStyle(color: Colors.white38, fontSize: 12)),
+            style: TextStyle(color: WatcherTheme.textHint, fontSize: 12)),
       ]),
       const SizedBox(height: 8),
       ClipRRect(
         borderRadius: BorderRadius.circular(4),
         child: LinearProgressIndicator(
           value: pct,
-          backgroundColor: const Color(0xFF2A2A3E),
+          backgroundColor: WatcherTheme.divider,
           valueColor: const AlwaysStoppedAnimation(Colors.green),
           minHeight: 10,
         ),

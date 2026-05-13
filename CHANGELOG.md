@@ -1,3 +1,8 @@
+## 1.0.9
+
+* Add dark/light theme toggle — tap the sun/moon icon in the inspector app bar.
+* All inspector screens (list, detail, stats) respect the selected theme.
+
 ## 1.0.8
 
 * Add search bar — filter logs by URL, method, or status code.

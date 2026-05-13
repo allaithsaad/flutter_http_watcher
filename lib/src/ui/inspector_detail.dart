@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 import '../model/network_log.dart';
+import 'watcher_theme.dart';
 
 class InspectorDetailScreen extends StatelessWidget {
   final NetworkLog log;
@@ -40,18 +41,18 @@ class InspectorDetailScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0D0D1A),
+      backgroundColor: WatcherTheme.background,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1A1A2E),
+        backgroundColor: WatcherTheme.surface,
         title: Text(
           '${log.method}  ${Uri.parse(log.url).path}',
-          style: const TextStyle(color: Colors.white, fontSize: 14),
+          style: TextStyle(color: WatcherTheme.textPrimary, fontSize: 14),
           overflow: TextOverflow.ellipsis,
         ),
-        iconTheme: const IconThemeData(color: Colors.white),
+        iconTheme: IconThemeData(color: WatcherTheme.iconColor),
         actions: [
           IconButton(
-            icon: const Icon(Icons.share_outlined),
+            icon: Icon(Icons.share_outlined, color: WatcherTheme.iconColor),
             tooltip: 'Share',
             onPressed: () => SharePlus.instance.share(
               ShareParams(text: _fullText()),
@@ -113,16 +114,16 @@ ${_prettyJson(log.responseBody)}
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(children: [
-              const Text('Summary',
+              Text('Summary',
                   style: TextStyle(
-                      color: Colors.white70,
+                      color: WatcherTheme.textSecond,
                       fontSize: 11,
                       fontWeight: FontWeight.bold)),
               const Spacer(),
               GestureDetector(
                 onTap: () =>
                     Clipboard.setData(ClipboardData(text: _summaryText())),
-                child: const Icon(Icons.copy, color: Colors.white38, size: 16),
+                child: Icon(Icons.copy, color: WatcherTheme.textHint, size: 16),
               ),
             ]),
             const SizedBox(height: 8),
@@ -139,12 +140,13 @@ ${_prettyJson(log.responseBody)}
             SizedBox(
               width: 80,
               child: Text(label,
-                  style: const TextStyle(color: Colors.white38, fontSize: 12)),
+                  style: TextStyle(color: WatcherTheme.textHint, fontSize: 12)),
             ),
             Expanded(
               child: Text(
                 value,
-                style: TextStyle(color: valueColor ?? Colors.white, fontSize: 12),
+                style: TextStyle(
+                    color: valueColor ?? WatcherTheme.textPrimary, fontSize: 12),
               ),
             ),
           ],
@@ -157,22 +159,21 @@ ${_prettyJson(log.responseBody)}
           children: [
             Row(children: [
               Text(title,
-                  style: const TextStyle(
-                      color: Colors.white70,
+                  style: TextStyle(
+                      color: WatcherTheme.textSecond,
                       fontSize: 11,
                       fontWeight: FontWeight.bold)),
               const Spacer(),
               GestureDetector(
                 onTap: () => Clipboard.setData(ClipboardData(text: content)),
-                child:
-                    const Icon(Icons.copy, color: Colors.white38, size: 16),
+                child: Icon(Icons.copy, color: WatcherTheme.textHint, size: 16),
               ),
             ]),
             const SizedBox(height: 8),
             Text(
               content,
-              style: const TextStyle(
-                  color: Color(0xFF90EE90),
+              style: TextStyle(
+                  color: WatcherTheme.codeText,
                   fontSize: 11,
                   fontFamily: 'monospace'),
             ),
@@ -183,7 +184,7 @@ ${_prettyJson(log.responseBody)}
   Widget _card(Widget child) => Container(
         width: double.infinity,
         decoration: BoxDecoration(
-          color: const Color(0xFF1A1A2E),
+          color: WatcherTheme.surface,
           borderRadius: BorderRadius.circular(10),
         ),
         padding: const EdgeInsets.all(12),

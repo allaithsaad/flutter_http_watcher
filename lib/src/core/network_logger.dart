@@ -25,8 +25,10 @@ class HttpWatcherLogger extends ChangeNotifier {
   NetworkStatus networkStatus = NetworkStatus.unknown;
 
   /// Set to `false` to disable logging without removing the overlay.
-  /// Automatically disabled in release builds.
   bool enabled = true;
+
+  /// Whether the inspector UI uses dark mode. Defaults to `true`.
+  bool isDark = true;
 
   /// Maximum number of entries kept in memory. Defaults to 300.
   int maxEntries = 300;
@@ -90,6 +92,12 @@ class HttpWatcherLogger extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Toggle between dark and light inspector theme.
+  void toggleTheme() {
+    isDark = !isDark;
+    notifyListeners();
+  }
+
   /// Toggle request logging on/off.
   void toggleEnabled() {
     enabled = !enabled;
@@ -103,6 +111,7 @@ class HttpWatcherLogger extends ChangeNotifier {
   }
 
   /// Stop the connectivity polling timer.
+  @override
   void dispose() {
     _connectivityTimer?.cancel();
     super.dispose();
