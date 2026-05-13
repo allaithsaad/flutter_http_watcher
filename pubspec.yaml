@@ -1,6 +1,6 @@
 name: flutter_http_watcher
 description: A lightweight in-app network inspector for Flutter. Floating draggable button with full request/response viewer. Works with any HTTP client.
-version: 1.1.0
+version: 1.1.1
 repository: https://github.com/allaithsaad/flutter_http_watcher
 topics:
   - network

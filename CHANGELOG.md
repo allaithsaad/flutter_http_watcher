@@ -1,3 +1,7 @@
+## 1.1.1
+
+* Add screenshots to README.
+
 ## 1.1.0
 
 * Add **cURL export** — copy any request as a `curl` command from the detail screen.
