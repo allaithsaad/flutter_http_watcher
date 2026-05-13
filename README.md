@@ -9,6 +9,17 @@ Works with **any** HTTP client — `http`, `dio`, `retrofit`, `graphql`, or your
 
 ---
 
+## Screenshots
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/allaithsaad/flutter_http_watcher/main/doc/1.jpg" width="200"/>
+  <img src="https://raw.githubusercontent.com/allaithsaad/flutter_http_watcher/main/doc/2.jpg" width="200"/>
+  <img src="https://raw.githubusercontent.com/allaithsaad/flutter_http_watcher/main/doc/3.jpg" width="200"/>
+  <img src="https://raw.githubusercontent.com/allaithsaad/flutter_http_watcher/main/doc/4.jpg" width="200"/>
+</p>
+
+---
+
 ## Features
 
 - Draggable floating button with live request count
