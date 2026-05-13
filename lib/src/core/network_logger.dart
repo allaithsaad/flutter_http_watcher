@@ -57,6 +57,12 @@ class HttpWatcherLogger extends ChangeNotifier {
   /// All captured logs, newest first. Returns an unmodifiable view.
   List<NetworkLog> get logs => List.unmodifiable(_logs);
 
+  /// Count of error responses: 4xx, 5xx, network failures, or status 0.
+  int get errorCount => _logs.where((l) {
+        final s = l.statusCode;
+        return s == null || s == 0 || s >= 400;
+      }).length;
+
   void _startConnectivityPolling() {
     _checkConnectivity();
     _connectivityTimer = Timer.periodic(

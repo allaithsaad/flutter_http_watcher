@@ -31,7 +31,9 @@ Works with **any** HTTP client — `http`, `dio`, `retrofit`, `graphql`, or your
 - **cURL export** — copy any request as a `curl` command
 - **Request replay** — re-send any logged request with one tap
 - **Stats screen** — success rate, avg duration, top hosts, slowest requests
-- **Save to file** — export all logs as `.txt` via share sheet
+- **Export logs** — save as `.txt` or export as `.har` (Postman / Charles / DevTools compatible)
+- **Error badge** — red badge on the floating button shows 4xx / 5xx / failed count
+- **Custom icon** — replace the default button icon via `HttpWatcherOverlay(icon: ...)`
 - Dark / light theme toggle
 - One-tap copy · share full request as text
 - Pause / resume logging
@@ -44,7 +46,7 @@ Works with **any** HTTP client — `http`, `dio`, `retrofit`, `graphql`, or your
 
 ```yaml
 dependencies:
-  flutter_http_watcher: ^1.1.0
+  flutter_http_watcher: ^1.2.0
 ```
 
 ---
@@ -184,10 +186,14 @@ Open by tapping the floating button. From the app bar you can:
 
 | Button | Action |
 |--------|--------|
+| Stats | Success rate, avg duration, top hosts, slowest requests |
+| Export | Save logs as `.txt` or export as `.har` (Postman / Charles / DevTools) |
+| Theme | Toggle dark / light mode |
+| Clear | Remove all logged requests |
 | Pause / Play | Stop or resume capturing new requests |
-| Delete | Clear all logged requests |
 
-Tap any row to see the full request headers, body, response body, status code, and duration.
+Tap any row to see the full request headers, body, response body, status code, and duration.  
+From the detail screen you can **copy as cURL**, **replay** the request, share, or copy any section.
 
 ---
 
@@ -212,7 +218,26 @@ HttpWatcherLogger.instance.toggleEnabled();
 
 // Change maximum entries kept in memory (default: 300):
 HttpWatcherLogger.instance.maxEntries = 100;
+
+// Read the current error count (4xx / 5xx / failed):
+final errors = HttpWatcherLogger.instance.errorCount;
 ```
+
+### Custom icon
+
+Pass any `IconData` to replace the default floating button icon:
+
+```dart
+HttpWatcherOverlay(
+  navigatorKey: navigatorKey,
+  icon: Icons.bug_report_outlined, // any IconData
+  child: child!,
+)
+```
+
+### Error badge
+
+A red badge appears automatically on the floating button whenever there are 4xx, 5xx, or failed requests. It clears when you tap **Clear** inside the inspector.
 
 ---
 

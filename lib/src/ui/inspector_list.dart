@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
@@ -31,7 +32,8 @@ class _InspectorListScreenState extends State<InspectorListScreen> {
     super.initState();
     HttpWatcherLogger.instance.addListener(_refresh);
     _search.addListener(
-        () => setState(() => _query = _search.text.trim().toLowerCase()));
+      () => setState(() => _query = _search.text.trim().toLowerCase()),
+    );
   }
 
   @override
@@ -51,23 +53,96 @@ class _InspectorListScreenState extends State<InspectorListScreen> {
     if (_statusFilter != null) {
       logs = logs.where((l) {
         switch (_statusFilter) {
-          case '2xx': return l.isSuccess;
-          case '4xx': return l.isClientError;
-          case '5xx': return l.isServerError;
-          case 'err': return l.isFailed;
-          default:    return true;
+          case '2xx':
+            return l.isSuccess;
+          case '4xx':
+            return l.isClientError;
+          case '5xx':
+            return l.isServerError;
+          case 'err':
+            return l.isFailed;
+          default:
+            return true;
         }
       }).toList();
     }
     if (_query.isNotEmpty) {
       logs = logs
-          .where((l) =>
-              l.url.toLowerCase().contains(_query) ||
-              l.method.toLowerCase().contains(_query) ||
-              '${l.statusCode}'.contains(_query))
+          .where(
+            (l) =>
+                l.url.toLowerCase().contains(_query) ||
+                l.method.toLowerCase().contains(_query) ||
+                '${l.statusCode}'.contains(_query),
+          )
           .toList();
     }
     return logs;
+  }
+
+  Future<void> _exportHar() async {
+    final logs = HttpWatcherLogger.instance.logs;
+    if (logs.isEmpty) return;
+    final entries = logs.map((log) {
+      final reqHeaders = (log.requestHeaders ?? {}).entries
+          .map((e) => {'name': e.key, 'value': e.value})
+          .toList();
+      final bodyStr = log.requestBody?.toString() ?? '';
+      final uri = Uri.tryParse(log.url) ?? Uri();
+      return {
+        'startedDateTime': log.timestamp.toUtc().toIso8601String(),
+        'time': log.durationMs,
+        'request': {
+          'method': log.method,
+          'url': log.url,
+          'httpVersion': 'HTTP/1.1',
+          'headers': reqHeaders,
+          'queryString': uri.queryParameters.entries
+              .map((e) => {'name': e.key, 'value': e.value})
+              .toList(),
+          'cookies': [],
+          'headersSize': -1,
+          'bodySize': bodyStr.isEmpty ? -1 : bodyStr.length,
+          if (bodyStr.isNotEmpty)
+            'postData': {'mimeType': 'application/json', 'text': bodyStr},
+        },
+        'response': {
+          'status': log.statusCode ?? 0,
+          'statusText': '',
+          'httpVersion': 'HTTP/1.1',
+          'headers': [],
+          'cookies': [],
+          'content': {
+            'size': log.responseBody?.length ?? 0,
+            'mimeType': 'application/json',
+            'text': log.responseBody ?? '',
+          },
+          'redirectURL': '',
+          'headersSize': -1,
+          'bodySize': log.responseBody?.length ?? -1,
+        },
+        'cache': {},
+        'timings': {'send': 0, 'wait': log.durationMs, 'receive': 0},
+      };
+    }).toList();
+
+    final har = {
+      'log': {
+        'version': '1.2',
+        'creator': {'name': 'flutter_http_watcher', 'version': '1.2.0'},
+        'entries': entries,
+      },
+    };
+
+    final json = const JsonEncoder.withIndent('  ').convert(har);
+    final dir = await getTemporaryDirectory();
+    final file = File('${dir.path}/http_watcher.har');
+    await file.writeAsString(json);
+    await SharePlus.instance.share(
+      ShareParams(
+        files: [XFile(file.path)],
+        subject: 'HTTP Watcher HAR Export',
+      ),
+    );
   }
 
   Future<void> _saveToFile() async {
@@ -77,7 +152,8 @@ class _InspectorListScreenState extends State<InspectorListScreen> {
     for (final log in logs) {
       buffer.writeln('[${log.method}] ${log.url}');
       buffer.writeln(
-          'Status: ${log.statusCode ?? "Error"}  Duration: ${log.durationMs}ms');
+        'Status: ${log.statusCode ?? "Error"}  Duration: ${log.durationMs}ms',
+      );
       buffer.writeln('Time: ${log.timestamp.toLocal()}');
       if (log.requestHeaders != null) {
         buffer.writeln('--- Request Headers ---');
@@ -99,18 +175,138 @@ class _InspectorListScreenState extends State<InspectorListScreen> {
     );
   }
 
+  void _showMenu(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: WatcherTheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (_) => SafeArea(
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 36,
+                height: 4,
+                margin: const EdgeInsets.symmetric(vertical: 10),
+                decoration: BoxDecoration(
+                  color: WatcherTheme.border,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              _menuTile(
+                icon: Icons.bar_chart_rounded,
+                label: 'Stats',
+                subtitle: 'Success rate, avg duration, top hosts',
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.of(context).push(InspectorStatsScreen.route());
+                },
+              ),
+              _menuTile(
+                icon: Icons.text_snippet_outlined,
+                label: 'Save as .txt',
+                subtitle: 'Export all logs as a plain text file',
+                onTap: () {
+                  Navigator.pop(context);
+                  _saveToFile();
+                },
+              ),
+              _menuTile(
+                icon: Icons.code_rounded,
+                label: 'Export as .har',
+                subtitle: 'Import into Postman, Charles, or DevTools',
+                onTap: () {
+                  Navigator.pop(context);
+                  _exportHar();
+                },
+              ),
+              StatefulBuilder(
+                builder: (ctx, setSt) => _menuTile(
+                  icon: WatcherTheme.isDark
+                      ? Icons.light_mode_outlined
+                      : Icons.dark_mode_outlined,
+                  label: WatcherTheme.isDark ? 'Light mode' : 'Dark mode',
+                  subtitle: 'Toggle inspector theme',
+                  onTap: () {
+                    HttpWatcherLogger.instance.toggleTheme();
+                    setSt(() {});
+                  },
+                ),
+              ),
+              StatefulBuilder(
+                builder: (ctx, setSt) => _menuTile(
+                  icon: HttpWatcherLogger.instance.enabled
+                      ? Icons.pause_circle_outline
+                      : Icons.play_circle_outline,
+                  label: HttpWatcherLogger.instance.enabled
+                      ? 'Pause logging'
+                      : 'Resume logging',
+                  subtitle: HttpWatcherLogger.instance.enabled
+                      ? 'Stop capturing new requests'
+                      : 'Start capturing requests again',
+                  iconColor: HttpWatcherLogger.instance.enabled
+                      ? WatcherTheme.iconColor
+                      : Colors.greenAccent,
+                  onTap: () {
+                    HttpWatcherLogger.instance.toggleEnabled();
+                    setSt(() {});
+                  },
+                ),
+              ),
+              _menuTile(
+                icon: Icons.delete_outline,
+                label: 'Clear all',
+                subtitle: 'Remove all logged requests',
+                iconColor: Colors.redAccent,
+                onTap: () {
+                  Navigator.pop(context);
+                  HttpWatcherLogger.instance.clear();
+                },
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _menuTile({
+    required IconData icon,
+    required String label,
+    required String subtitle,
+    required VoidCallback onTap,
+    Color? iconColor,
+  }) => ListTile(
+    leading: Icon(icon, color: iconColor ?? WatcherTheme.iconColor),
+    title: Text(label, style: TextStyle(color: WatcherTheme.textPrimary)),
+    subtitle: Text(
+      subtitle,
+      style: TextStyle(color: WatcherTheme.textHint, fontSize: 12),
+    ),
+    onTap: onTap,
+  );
+
   Color _methodColor(String method) {
     switch (method) {
-      case 'GET':    return const Color(0xFF61AFEF);
-      case 'POST':   return const Color(0xFF98C379);
-      case 'PUT':    return const Color(0xFFE5C07B);
-      case 'DELETE': return const Color(0xFFE06C75);
-      default:       return WatcherTheme.textSecond;
+      case 'GET':
+        return const Color(0xFF61AFEF);
+      case 'POST':
+        return const Color(0xFF98C379);
+      case 'PUT':
+        return const Color(0xFFE5C07B);
+      case 'DELETE':
+        return const Color(0xFFE06C75);
+      default:
+        return WatcherTheme.textSecond;
     }
   }
 
   Color _statusColor(NetworkLog log) {
-    if (log.isSuccess)     return Colors.green;
+    if (log.isSuccess) return Colors.green;
     if (log.isClientError) return Colors.orange;
     if (log.isServerError) return Colors.red;
     return Colors.grey;
@@ -123,45 +319,16 @@ class _InspectorListScreenState extends State<InspectorListScreen> {
       backgroundColor: WatcherTheme.background,
       appBar: AppBar(
         backgroundColor: WatcherTheme.surface,
-        title: Text('Network Inspector',
-            style: TextStyle(color: WatcherTheme.textPrimary)),
+        title: Text(
+          'Network Inspector',
+          style: TextStyle(color: WatcherTheme.textPrimary),
+        ),
         iconTheme: IconThemeData(color: WatcherTheme.iconColor),
         actions: [
           IconButton(
-            icon: Icon(Icons.bar_chart_rounded, color: WatcherTheme.iconColor),
-            tooltip: 'Stats',
-            onPressed: () =>
-                Navigator.of(context).push(InspectorStatsScreen.route()),
-          ),
-          IconButton(
-            icon: Icon(Icons.save_alt_outlined, color: WatcherTheme.iconColor),
-            tooltip: 'Save to file',
-            onPressed: _saveToFile,
-          ),
-          IconButton(
-            icon: Icon(
-              WatcherTheme.isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
-              color: WatcherTheme.iconColor,
-            ),
-            tooltip: WatcherTheme.isDark ? 'Light mode' : 'Dark mode',
-            onPressed: HttpWatcherLogger.instance.toggleTheme,
-          ),
-          IconButton(
-            icon: Icon(Icons.delete_outline, color: WatcherTheme.iconColor),
-            tooltip: 'Clear',
-            onPressed: () => HttpWatcherLogger.instance.clear(),
-          ),
-          IconButton(
-            icon: Icon(
-              HttpWatcherLogger.instance.enabled
-                  ? Icons.pause_circle_outline
-                  : Icons.play_circle_outline,
-              color: HttpWatcherLogger.instance.enabled
-                  ? WatcherTheme.iconColor
-                  : Colors.greenAccent,
-            ),
-            tooltip: HttpWatcherLogger.instance.enabled ? 'Pause' : 'Resume',
-            onPressed: HttpWatcherLogger.instance.toggleEnabled,
+            icon: Icon(Icons.more_vert, color: WatcherTheme.iconColor),
+            tooltip: 'Options',
+            onPressed: () => _showMenu(context),
           ),
         ],
       ),
@@ -174,14 +341,22 @@ class _InspectorListScreenState extends State<InspectorListScreen> {
               style: TextStyle(color: WatcherTheme.textPrimary, fontSize: 13),
               decoration: InputDecoration(
                 hintText: 'Search URL, method, status...',
-                hintStyle:
-                    TextStyle(color: WatcherTheme.textHint, fontSize: 13),
-                prefixIcon: Icon(Icons.search,
-                    color: WatcherTheme.textHint, size: 18),
+                hintStyle: TextStyle(
+                  color: WatcherTheme.textHint,
+                  fontSize: 13,
+                ),
+                prefixIcon: Icon(
+                  Icons.search,
+                  color: WatcherTheme.textHint,
+                  size: 18,
+                ),
                 suffixIcon: _query.isNotEmpty
                     ? IconButton(
-                        icon: Icon(Icons.close,
-                            color: WatcherTheme.textHint, size: 18),
+                        icon: Icon(
+                          Icons.close,
+                          color: WatcherTheme.textHint,
+                          size: 18,
+                        ),
                         onPressed: () => _search.clear(),
                       )
                     : null,
@@ -200,15 +375,21 @@ class _InspectorListScreenState extends State<InspectorListScreen> {
             padding: const EdgeInsets.fromLTRB(12, 4, 12, 2),
             child: Row(
               children: [
-                _chip('All', _methodFilter == null,
-                    () => setState(() => _methodFilter = null)),
-                ..._methods.map((m) => _chip(
-                      m,
-                      _methodFilter == m,
-                      () => setState(() =>
-                          _methodFilter = _methodFilter == m ? null : m),
-                      color: _methodColor(m),
-                    )),
+                _chip(
+                  'All',
+                  _methodFilter == null,
+                  () => setState(() => _methodFilter = null),
+                ),
+                ..._methods.map(
+                  (m) => _chip(
+                    m,
+                    _methodFilter == m,
+                    () => setState(
+                      () => _methodFilter = _methodFilter == m ? null : m,
+                    ),
+                    color: _methodColor(m),
+                  ),
+                ),
               ],
             ),
           ),
@@ -217,20 +398,43 @@ class _InspectorListScreenState extends State<InspectorListScreen> {
             padding: const EdgeInsets.fromLTRB(12, 2, 12, 8),
             child: Row(
               children: [
-                _chip('All', _statusFilter == null,
-                    () => setState(() => _statusFilter = null)),
-                _chip('2xx', _statusFilter == '2xx',
-                    () => setState(() => _statusFilter = _statusFilter == '2xx' ? null : '2xx'),
-                    color: Colors.green),
-                _chip('4xx', _statusFilter == '4xx',
-                    () => setState(() => _statusFilter = _statusFilter == '4xx' ? null : '4xx'),
-                    color: Colors.orange),
-                _chip('5xx', _statusFilter == '5xx',
-                    () => setState(() => _statusFilter = _statusFilter == '5xx' ? null : '5xx'),
-                    color: Colors.red),
-                _chip('Error', _statusFilter == 'err',
-                    () => setState(() => _statusFilter = _statusFilter == 'err' ? null : 'err'),
-                    color: Colors.grey),
+                _chip(
+                  'All',
+                  _statusFilter == null,
+                  () => setState(() => _statusFilter = null),
+                ),
+                _chip(
+                  '2xx',
+                  _statusFilter == '2xx',
+                  () => setState(
+                    () => _statusFilter = _statusFilter == '2xx' ? null : '2xx',
+                  ),
+                  color: Colors.green,
+                ),
+                _chip(
+                  '4xx',
+                  _statusFilter == '4xx',
+                  () => setState(
+                    () => _statusFilter = _statusFilter == '4xx' ? null : '4xx',
+                  ),
+                  color: Colors.orange,
+                ),
+                _chip(
+                  '5xx',
+                  _statusFilter == '5xx',
+                  () => setState(
+                    () => _statusFilter = _statusFilter == '5xx' ? null : '5xx',
+                  ),
+                  color: Colors.red,
+                ),
+                _chip(
+                  'Error',
+                  _statusFilter == 'err',
+                  () => setState(
+                    () => _statusFilter = _statusFilter == 'err' ? null : 'err',
+                  ),
+                  color: Colors.grey,
+                ),
               ],
             ),
           ),
@@ -239,7 +443,9 @@ class _InspectorListScreenState extends State<InspectorListScreen> {
             child: logs.isEmpty
                 ? Center(
                     child: Text(
-                      _query.isNotEmpty || _methodFilter != null || _statusFilter != null
+                      _query.isNotEmpty ||
+                              _methodFilter != null ||
+                              _statusFilter != null
                           ? 'No matching requests'
                           : 'No requests yet',
                       style: TextStyle(color: WatcherTheme.textHint),
@@ -252,55 +458,75 @@ class _InspectorListScreenState extends State<InspectorListScreen> {
                     itemBuilder: (context, i) {
                       final log = logs[i];
                       return InkWell(
-                        onTap: () => Navigator.of(context)
-                            .push(InspectorDetailScreen.route(log)),
+                        onTap: () => Navigator.of(
+                          context,
+                        ).push(InspectorDetailScreen.route(log)),
                         child: Padding(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 10),
-                          child: Row(children: [
-                            SizedBox(
-                              width: 52,
-                              child: Text(log.method,
+                            horizontal: 16,
+                            vertical: 10,
+                          ),
+                          child: Row(
+                            children: [
+                              SizedBox(
+                                width: 52,
+                                child: Text(
+                                  log.method,
                                   style: TextStyle(
-                                      color: _methodColor(log.method),
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.bold)),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                                    color: _methodColor(log.method),
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      Uri.parse(log.url).path,
+                                      style: TextStyle(
+                                        color: WatcherTheme.textPrimary,
+                                        fontSize: 13,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      Uri.parse(log.url).host,
+                                      style: TextStyle(
+                                        color: WatcherTheme.textHint,
+                                        fontSize: 11,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
                                 children: [
-                                  Text(Uri.parse(log.url).path,
-                                      style: TextStyle(
-                                          color: WatcherTheme.textPrimary,
-                                          fontSize: 13),
-                                      overflow: TextOverflow.ellipsis),
-                                  const SizedBox(height: 2),
-                                  Text(Uri.parse(log.url).host,
-                                      style: TextStyle(
-                                          color: WatcherTheme.textHint,
-                                          fontSize: 11),
-                                      overflow: TextOverflow.ellipsis),
+                                  Text(
+                                    '${log.statusCode ?? "ERR"}',
+                                    style: TextStyle(
+                                      color: _statusColor(log),
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  Text(
+                                    '${log.durationMs}ms',
+                                    style: TextStyle(
+                                      color: WatcherTheme.textHint,
+                                      fontSize: 11,
+                                    ),
+                                  ),
                                 ],
                               ),
-                            ),
-                            const SizedBox(width: 8),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Text('${log.statusCode ?? "ERR"}',
-                                    style: TextStyle(
-                                        color: _statusColor(log),
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.bold)),
-                                Text('${log.durationMs}ms',
-                                    style: TextStyle(
-                                        color: WatcherTheme.textHint,
-                                        fontSize: 11)),
-                              ],
-                            ),
-                          ]),
+                            ],
+                          ),
                         ),
                       );
                     },
@@ -311,39 +537,40 @@ class _InspectorListScreenState extends State<InspectorListScreen> {
     );
   }
 
-  Widget _chip(String label, bool selected, VoidCallback onTap,
-          {Color? color}) =>
-      Padding(
-        padding: const EdgeInsets.only(right: 6),
-        child: GestureDetector(
-          onTap: onTap,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 150),
-            padding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-            decoration: BoxDecoration(
-              color: selected
-                  ? (color ?? WatcherTheme.textPrimary).withValues(alpha: 0.15)
-                  : WatcherTheme.surface,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: selected
-                    ? (color ?? WatcherTheme.textSecond)
-                    : WatcherTheme.border,
-              ),
-            ),
-            child: Text(
-              label,
-              style: TextStyle(
-                color: selected
-                    ? (color ?? WatcherTheme.textPrimary)
-                    : WatcherTheme.textHint,
-                fontSize: 12,
-                fontWeight:
-                    selected ? FontWeight.bold : FontWeight.normal,
-              ),
-            ),
+  Widget _chip(
+    String label,
+    bool selected,
+    VoidCallback onTap, {
+    Color? color,
+  }) => Padding(
+    padding: const EdgeInsets.only(right: 6),
+    child: GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+        decoration: BoxDecoration(
+          color: selected
+              ? (color ?? WatcherTheme.textPrimary).withValues(alpha: 0.15)
+              : WatcherTheme.surface,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: selected
+                ? (color ?? WatcherTheme.textSecond)
+                : WatcherTheme.border,
           ),
         ),
-      );
+        child: Text(
+          label,
+          style: TextStyle(
+            color: selected
+                ? (color ?? WatcherTheme.textPrimary)
+                : WatcherTheme.textHint,
+            fontSize: 12,
+            fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+          ),
+        ),
+      ),
+    ),
+  );
 }

@@ -25,6 +25,7 @@ Color _statusColor(NetworkStatus s) {
 /// ```
 ///
 /// Set [show] to `false` to hide the button (e.g. via a feature flag).
+/// Set [icon] to replace the default network icon with any [IconData].
 class HttpWatcherOverlay extends StatefulWidget {
   final Widget child;
 
@@ -35,11 +36,15 @@ class HttpWatcherOverlay extends StatefulWidget {
   /// Pass your app's [navigatorKey] or `Get.key` (for GetX apps).
   final GlobalKey<NavigatorState> navigatorKey;
 
+  /// Custom icon for the floating button. Defaults to [Icons.network_check_rounded].
+  final IconData? icon;
+
   const HttpWatcherOverlay({
     super.key,
     required this.child,
     required this.navigatorKey,
     this.show = true,
+    this.icon,
   });
 
   @override
@@ -85,8 +90,10 @@ class _HttpWatcherOverlayState extends State<HttpWatcherOverlay> {
             }),
             child: _InspectorButton(
               count: HttpWatcherLogger.instance.logs.length,
+              errorCount: HttpWatcherLogger.instance.errorCount,
               status: HttpWatcherLogger.instance.networkStatus,
               paused: !HttpWatcherLogger.instance.enabled,
+              icon: widget.icon,
               onTap: () {
                 if (!HttpWatcherLogger.instance.enabled) {
                   HttpWatcherLogger.instance.toggleEnabled();
@@ -106,20 +113,24 @@ class _HttpWatcherOverlayState extends State<HttpWatcherOverlay> {
 
 class _InspectorButton extends StatelessWidget {
   final int count;
+  final int errorCount;
   final NetworkStatus status;
   final bool paused;
+  final IconData? icon;
   final VoidCallback onTap;
 
   const _InspectorButton({
     required this.count,
+    required this.errorCount,
     required this.status,
     required this.paused,
     required this.onTap,
+    this.icon,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Material(
+    final button = Material(
       elevation: 6,
       borderRadius: BorderRadius.circular(24),
       color: paused
@@ -146,7 +157,7 @@ class _InspectorButton extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 5),
-                const Icon(Icons.network_check_rounded,
+                Icon(icon ?? Icons.network_check_rounded,
                     color: Colors.white, size: 18),
                 if (count > 0) ...[
                   const SizedBox(width: 5),
@@ -163,6 +174,33 @@ class _InspectorButton extends StatelessWidget {
           ),
         ),
       ),
+    );
+
+    if (errorCount == 0 || paused) return button;
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        button,
+        Positioned(
+          top: -4,
+          right: -4,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+            decoration: BoxDecoration(
+              color: Colors.red,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              errorCount > 99 ? '99+' : '$errorCount',
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 9,
+                  fontWeight: FontWeight.bold),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

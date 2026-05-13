@@ -1,3 +1,9 @@
+## 1.2.0
+
+* Add **HAR export** — export all logs as a `.har` file (importable in Postman, Charles, browser DevTools).
+* Add **error badge** — red badge on the floating button showing 4xx / 5xx / failed request count.
+* Add **custom icon** — pass any `IconData` to `HttpWatcherOverlay(icon: ...)` to replace the default button icon.
+
 ## 1.1.1
 
 * Add screenshots to README.
