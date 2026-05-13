@@ -1,3 +1,10 @@
+## 1.0.8
+
+* Add search bar — filter logs by URL, method, or status code.
+* Add method filter chips — quickly show only GET / POST / PUT / DELETE.
+* Add stats screen — success rate, avg duration, by-method breakdown, top hosts, slowest requests.
+* Add save to file — export all logs as a `.txt` file via the share sheet.
+
 ## 1.0.7
 
 * Example app updated with three tabs: `http`, `dio`, and manual logging.

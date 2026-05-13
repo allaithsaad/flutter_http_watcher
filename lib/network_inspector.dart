@@ -38,3 +38,4 @@ library flutter_http_watcher;
 export 'src/core/network_logger.dart';
 export 'src/model/network_log.dart';
 export 'src/ui/inspector_overlay.dart';
+export 'src/ui/inspector_stats.dart';
