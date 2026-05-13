@@ -3,18 +3,39 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import '../model/network_log.dart';
 
-enum NetworkStatus { online, offline, unknown }
+/// Current network connectivity state.
+enum NetworkStatus {
+  /// Device has an active internet connection.
+  online,
 
-/// Central store for all captured network logs.
+  /// Device has no internet connection.
+  offline,
+
+  /// Connectivity has not been determined yet.
+  unknown,
+}
+
+/// Central store for all captured HTTP logs.
 ///
-/// Access via [HttpWatcherLogger.instance]. Call [logRequest] after every HTTP
-/// response. Wrap your app with [NetworkInspectorOverlay] to display the
-/// floating debug button.
+/// Access the singleton via [HttpWatcherLogger.instance].
+/// Call [logRequest] after every HTTP response.
+/// Wrap your app with [HttpWatcherOverlay] to display the floating button.
+///
+/// ```dart
+/// HttpWatcherLogger.instance.logRequest(
+///   method: 'GET',
+///   url: 'https://api.example.com/users',
+///   statusCode: 200,
+///   responseBody: responseBody,
+///   startTime: start,
+/// );
+/// ```
 class HttpWatcherLogger extends ChangeNotifier {
   HttpWatcherLogger._() {
-    if (kDebugMode && !kIsWeb) _startConnectivityPolling();
+    if (!kIsWeb) _startConnectivityPolling();
   }
 
+  /// The global singleton instance.
   static final HttpWatcherLogger instance = HttpWatcherLogger._();
 
   final List<NetworkLog> _logs = [];
@@ -24,16 +45,16 @@ class HttpWatcherLogger extends ChangeNotifier {
   /// Current network connectivity status.
   NetworkStatus networkStatus = NetworkStatus.unknown;
 
-  /// Set to `false` to disable logging without removing the overlay.
+  /// Set to `false` to pause logging without removing the overlay.
   bool enabled = true;
 
   /// Whether the inspector UI uses dark mode. Defaults to `true`.
   bool isDark = true;
 
-  /// Maximum number of entries kept in memory. Defaults to 300.
+  /// Maximum number of log entries kept in memory. Defaults to 300.
   int maxEntries = 300;
 
-  /// All captured logs, newest first.
+  /// All captured logs, newest first. Returns an unmodifiable view.
   List<NetworkLog> get logs => List.unmodifiable(_logs);
 
   void _startConnectivityPolling() {
@@ -63,7 +84,10 @@ class HttpWatcherLogger extends ChangeNotifier {
 
   /// Log a completed HTTP request/response pair.
   ///
-  /// No-op in release builds or when [enabled] is `false`.
+  /// No-op when [enabled] is `false`.
+  ///
+  /// [method] should be an uppercase HTTP verb (GET, POST, etc.).
+  /// [startTime] is when the request was initiated; duration is computed automatically.
   void logRequest({
     required String method,
     required String url,
@@ -92,15 +116,15 @@ class HttpWatcherLogger extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Toggle between dark and light inspector theme.
-  void toggleTheme() {
-    isDark = !isDark;
-    notifyListeners();
-  }
-
   /// Toggle request logging on/off.
   void toggleEnabled() {
     enabled = !enabled;
+    notifyListeners();
+  }
+
+  /// Toggle between dark and light inspector theme.
+  void toggleTheme() {
+    isDark = !isDark;
     notifyListeners();
   }
 
@@ -110,7 +134,6 @@ class HttpWatcherLogger extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Stop the connectivity polling timer.
   @override
   void dispose() {
     _connectivityTimer?.cancel();

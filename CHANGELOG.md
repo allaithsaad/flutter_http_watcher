@@ -1,3 +1,12 @@
+## 1.1.0
+
+* Add **cURL export** — copy any request as a `curl` command from the detail screen.
+* Add **request replay** — re-send any logged request with one tap.
+* Add **status code filter chips** — filter by 2xx / 4xx / 5xx / Error alongside method chips.
+* Add `topics` to pubspec for better pub.dev discoverability.
+* Full API documentation on all public classes and methods.
+* Comprehensive unit tests for `HttpWatcherLogger` and `NetworkLog`.
+
 ## 1.0.9
 
 * Add dark/light theme toggle — tap the sun/moon icon in the inspector app bar.

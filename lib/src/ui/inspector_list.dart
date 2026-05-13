@@ -22,6 +22,7 @@ class _InspectorListScreenState extends State<InspectorListScreen> {
   final _search = TextEditingController();
   String _query = '';
   String? _methodFilter;
+  String? _statusFilter; // '2xx', '4xx', '5xx', 'err'
 
   static const _methods = ['GET', 'POST', 'PUT', 'DELETE'];
 
@@ -46,6 +47,17 @@ class _InspectorListScreenState extends State<InspectorListScreen> {
     var logs = HttpWatcherLogger.instance.logs.toList();
     if (_methodFilter != null) {
       logs = logs.where((l) => l.method == _methodFilter).toList();
+    }
+    if (_statusFilter != null) {
+      logs = logs.where((l) {
+        switch (_statusFilter) {
+          case '2xx': return l.isSuccess;
+          case '4xx': return l.isClientError;
+          case '5xx': return l.isServerError;
+          case 'err': return l.isFailed;
+          default:    return true;
+        }
+      }).toList();
     }
     if (_query.isNotEmpty) {
       logs = logs
@@ -185,7 +197,7 @@ class _InspectorListScreenState extends State<InspectorListScreen> {
           ),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+            padding: const EdgeInsets.fromLTRB(12, 4, 12, 2),
             child: Row(
               children: [
                 _chip('All', _methodFilter == null,
@@ -200,12 +212,34 @@ class _InspectorListScreenState extends State<InspectorListScreen> {
               ],
             ),
           ),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.fromLTRB(12, 2, 12, 8),
+            child: Row(
+              children: [
+                _chip('All', _statusFilter == null,
+                    () => setState(() => _statusFilter = null)),
+                _chip('2xx', _statusFilter == '2xx',
+                    () => setState(() => _statusFilter = _statusFilter == '2xx' ? null : '2xx'),
+                    color: Colors.green),
+                _chip('4xx', _statusFilter == '4xx',
+                    () => setState(() => _statusFilter = _statusFilter == '4xx' ? null : '4xx'),
+                    color: Colors.orange),
+                _chip('5xx', _statusFilter == '5xx',
+                    () => setState(() => _statusFilter = _statusFilter == '5xx' ? null : '5xx'),
+                    color: Colors.red),
+                _chip('Error', _statusFilter == 'err',
+                    () => setState(() => _statusFilter = _statusFilter == 'err' ? null : 'err'),
+                    color: Colors.grey),
+              ],
+            ),
+          ),
           Divider(color: WatcherTheme.divider, height: 1),
           Expanded(
             child: logs.isEmpty
                 ? Center(
                     child: Text(
-                      _query.isNotEmpty || _methodFilter != null
+                      _query.isNotEmpty || _methodFilter != null || _statusFilter != null
                           ? 'No matching requests'
                           : 'No requests yet',
                       style: TextStyle(color: WatcherTheme.textHint),

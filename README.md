@@ -15,10 +15,16 @@ Works with **any** HTTP client — `http`, `dio`, `retrofit`, `graphql`, or your
 - **Live connectivity dot** — green (online) · red (offline) · grey (unknown)
 - Color-coded by HTTP method (GET / POST / PUT / DELETE)
 - Color-coded status codes (green 2xx · orange 4xx · red 5xx)
+- Search bar + method & status code filter chips
 - Full request & response viewer with JSON pretty-printing
-- One-tap copy to clipboard · share full request as text
-- Pause / resume logging from within the inspector
-- Works with any HTTP client via `logRequest`
+- **cURL export** — copy any request as a `curl` command
+- **Request replay** — re-send any logged request with one tap
+- **Stats screen** — success rate, avg duration, top hosts, slowest requests
+- **Save to file** — export all logs as `.txt` via share sheet
+- Dark / light theme toggle
+- One-tap copy · share full request as text
+- Pause / resume logging
+- Works with **any** HTTP client — zero HTTP dependencies
 - Controlled entirely by the `show` flag — use in debug, release, or staging
 
 ---
@@ -27,7 +33,7 @@ Works with **any** HTTP client — `http`, `dio`, `retrofit`, `graphql`, or your
 
 ```yaml
 dependencies:
-  flutter_http_watcher: ^1.0.6
+  flutter_http_watcher: ^1.1.0
 ```
 
 ---
