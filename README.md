@@ -1,7 +1,9 @@
-# network_inspector
+# flutter_http_watcher
 
 A lightweight in-app network inspector for Flutter.  
 Shows a draggable floating button that opens a full request/response viewer — no external dependencies beyond `http`, debug-only, zero setup.
+
+<img src="doc/demo.gif" width="300"/>
 
 ---
 
@@ -14,7 +16,7 @@ Shows a draggable floating button that opens a full request/response viewer — 
 - Full request & response viewer with JSON pretty-printing
 - One-tap copy to clipboard
 - Pause / resume logging from within the inspector
-- Built-in `NetworkInspectorHttpClient` for the `http` package
+- Built-in `HttpWatcherClient` for the `http` package
 - Manual `logRequest` API for any HTTP client
 - **Zero overhead in release builds** — logging and UI are stripped automatically
 
@@ -39,11 +41,11 @@ import 'package:flutter_http_watcher/network_inspector.dart';
 // Declare a navigator key in your app (or use Get.key for GetX):
 final navigatorKey = GlobalKey<NavigatorState>();
 
-// Pass it to both MaterialApp and NetworkInspectorOverlay:
+// Pass it to both MaterialApp and HttpWatcherOverlay:
 MaterialApp(
   navigatorKey: navigatorKey,
   builder: (context, child) {
-    return NetworkInspectorOverlay(
+    return HttpWatcherOverlay(
       navigatorKey: navigatorKey, // required
       show: true,                 // set false to hide (e.g. via a feature flag)
       child: child!,
@@ -57,7 +59,7 @@ MaterialApp(
 > ```dart
 > GetMaterialApp(
 >   builder: (context, child) {
->     return NetworkInspectorOverlay(
+>     return HttpWatcherOverlay(
 >       navigatorKey: Get.key,
 >       child: child!,
 >     );
@@ -70,7 +72,7 @@ MaterialApp(
 ```dart
 import 'package:flutter_http_watcher/network_inspector.dart';
 
-final client = NetworkInspectorHttpClient();
+final client = HttpWatcherClient();
 final response = await client.get(Uri.parse('https://api.example.com/users'));
 // Every request/response is logged automatically.
 ```
@@ -78,7 +80,7 @@ final response = await client.get(Uri.parse('https://api.example.com/users'));
 Or wrap an existing client:
 
 ```dart
-final client = NetworkInspectorHttpClient(myExistingClient);
+final client = HttpWatcherClient(myExistingClient);
 ```
 
 ### 2b — Manual logging (any HTTP client)
@@ -87,7 +89,7 @@ final client = NetworkInspectorHttpClient(myExistingClient);
 final start = DateTime.now();
 final response = await myClient.get(uri);
 
-NetworkLogger.instance.logRequest(
+HttpWatcherLogger.instance.logRequest(
   method: 'GET',
   url: uri.toString(),
   statusCode: response.statusCode,
@@ -127,16 +129,16 @@ The floating button shows a small dot reflecting the current network status, che
 
 ```dart
 // Show/hide the button via a constant:
-NetworkInspectorOverlay(show: AppConstants.showNetworkInspector, child: child!)
+HttpWatcherOverlay(show: AppConstants.showNetworkInspector, child: child!)
 
 // Disable logging at runtime:
-NetworkLogger.instance.enabled = false;
+HttpWatcherLogger.instance.enabled = false;
 
 // Toggle logging on/off:
-NetworkLogger.instance.toggleEnabled();
+HttpWatcherLogger.instance.toggleEnabled();
 
 // Change maximum entries kept in memory (default: 300):
-NetworkLogger.instance.maxEntries = 100;
+HttpWatcherLogger.instance.maxEntries = 100;
 ```
 
 ---

@@ -18,7 +18,7 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
       ),
-      builder: (context, child) => NetworkInspectorOverlay(
+      builder: (context, child) => HttpWatcherOverlay(
         navigatorKey: navigatorKey,
         child: child!,
       ),
@@ -34,7 +34,7 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  final _client = NetworkInspectorHttpClient();
+  final _client = HttpWatcherClient();
   final List<String> _results = [];
   bool _loading = false;
 

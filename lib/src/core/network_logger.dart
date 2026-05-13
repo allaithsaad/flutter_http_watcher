@@ -7,15 +7,15 @@ enum NetworkStatus { online, offline, unknown }
 
 /// Central store for all captured network logs.
 ///
-/// Access via [NetworkLogger.instance]. Call [logRequest] after every HTTP
+/// Access via [HttpWatcherLogger.instance]. Call [logRequest] after every HTTP
 /// response. Wrap your app with [NetworkInspectorOverlay] to display the
 /// floating debug button.
-class NetworkLogger extends ChangeNotifier {
-  NetworkLogger._() {
+class HttpWatcherLogger extends ChangeNotifier {
+  HttpWatcherLogger._() {
     if (kDebugMode && !kIsWeb) _startConnectivityPolling();
   }
 
-  static final NetworkLogger instance = NetworkLogger._();
+  static final HttpWatcherLogger instance = HttpWatcherLogger._();
 
   final List<NetworkLog> _logs = [];
   int _counter = 0;

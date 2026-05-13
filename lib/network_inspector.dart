@@ -4,7 +4,7 @@
 ///
 /// **1. Wrap your app (pass your app's navigatorKey):**
 /// ```dart
-/// builder: (context, child) => NetworkInspectorOverlay(
+/// builder: (context, child) => HttpWatcherOverlay(
 ///   navigatorKey: navigatorKey, // GlobalKey<NavigatorState> — required
 ///   child: child!,
 /// ),
@@ -12,7 +12,7 @@
 ///
 /// **2a. Use the built-in HTTP client (automatic logging):**
 /// ```dart
-/// final client = NetworkInspectorHttpClient();
+/// final client = HttpWatcherClient();
 /// final response = await client.get(Uri.parse('https://api.example.com'));
 /// ```
 ///
@@ -20,7 +20,7 @@
 /// ```dart
 /// final start = DateTime.now();
 /// final response = await http.get(uri);
-/// NetworkLogger.instance.logRequest(
+/// HttpWatcherLogger.instance.logRequest(
 ///   method: 'GET',
 ///   url: uri.toString(),
 ///   statusCode: response.statusCode,
@@ -31,7 +31,7 @@
 ///
 /// **3. Control visibility via a flag:**
 /// ```dart
-/// NetworkInspectorOverlay(show: AppConstants.showNetworkInspector, child: child!)
+/// HttpWatcherOverlay(show: AppConstants.showNetworkInspector, child: child!)
 /// ```
 library flutter_http_watcher;
 

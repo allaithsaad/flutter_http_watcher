@@ -17,12 +17,12 @@ class _InspectorListScreenState extends State<InspectorListScreen> {
   @override
   void initState() {
     super.initState();
-    NetworkLogger.instance.addListener(_refresh);
+    HttpWatcherLogger.instance.addListener(_refresh);
   }
 
   @override
   void dispose() {
-    NetworkLogger.instance.removeListener(_refresh);
+    HttpWatcherLogger.instance.removeListener(_refresh);
     super.dispose();
   }
 
@@ -47,7 +47,7 @@ class _InspectorListScreenState extends State<InspectorListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final logs = NetworkLogger.instance.logs;
+    final logs = HttpWatcherLogger.instance.logs;
     return Scaffold(
       backgroundColor: const Color(0xFF0D0D1A),
       appBar: AppBar(
@@ -59,20 +59,20 @@ class _InspectorListScreenState extends State<InspectorListScreen> {
           IconButton(
             icon: const Icon(Icons.delete_outline, color: Colors.white70),
             tooltip: 'Clear',
-            onPressed: () => NetworkLogger.instance.clear(),
+            onPressed: () => HttpWatcherLogger.instance.clear(),
           ),
           IconButton(
             icon: Icon(
-              NetworkLogger.instance.enabled
+              HttpWatcherLogger.instance.enabled
                   ? Icons.pause_circle_outline
                   : Icons.play_circle_outline,
-              color: NetworkLogger.instance.enabled
+              color: HttpWatcherLogger.instance.enabled
                   ? Colors.white70
                   : Colors.greenAccent,
             ),
-            tooltip: NetworkLogger.instance.enabled ? 'Pause logging' : 'Resume logging',
+            tooltip: HttpWatcherLogger.instance.enabled ? 'Pause logging' : 'Resume logging',
             onPressed: () {
-              NetworkLogger.instance.toggleEnabled();
+              HttpWatcherLogger.instance.toggleEnabled();
             },
           ),
         ],

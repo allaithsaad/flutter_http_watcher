@@ -1,9 +1,16 @@
+## 1.0.1
+
+* Rename public API to match package name:
+  * `NetworkInspectorOverlay` → `HttpWatcherOverlay`
+  * `NetworkInspectorHttpClient` → `HttpWatcherClient`
+  * `NetworkLogger` → `HttpWatcherLogger`
+
 ## 1.0.0
 
 * Initial release of `flutter_http_watcher`.
-* `NetworkInspectorOverlay` — draggable floating button overlay with live connectivity dot.
+* `HttpWatcherOverlay` — draggable floating button overlay with live connectivity dot.
 * `NetworkLogger` — singleton ChangeNotifier log store with pause/resume support.
-* `NetworkInspectorHttpClient` — automatic `http` package adapter.
+* `HttpWatcherClient` — automatic `http` package adapter.
 * Manual `logRequest` API for any HTTP client.
 * Share button in the detail screen — shares the full request/response as plain text.
 * Copy button on every section (summary, headers, body).

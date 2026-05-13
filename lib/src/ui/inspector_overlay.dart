@@ -19,14 +19,14 @@ Color _statusColor(NetworkStatus s) {
 /// Place this as the outermost widget in your `MaterialApp` builder:
 ///
 /// ```dart
-/// builder: (context, child) => NetworkInspectorOverlay(
+/// builder: (context, child) => HttpWatcherOverlay(
 ///   navigatorKey: Get.key, // pass your app's navigator key
 ///   child: child!,
 /// ),
 /// ```
 ///
 /// Set [show] to `false` to hide the button (e.g. via a feature flag).
-class NetworkInspectorOverlay extends StatefulWidget {
+class HttpWatcherOverlay extends StatefulWidget {
   final Widget child;
 
   /// Whether to show the inspector button. Has no effect in release builds.
@@ -36,7 +36,7 @@ class NetworkInspectorOverlay extends StatefulWidget {
   /// Pass your app's [navigatorKey] or `Get.key` (for GetX apps).
   final GlobalKey<NavigatorState> navigatorKey;
 
-  const NetworkInspectorOverlay({
+  const HttpWatcherOverlay({
     super.key,
     required this.child,
     required this.navigatorKey,
@@ -44,23 +44,23 @@ class NetworkInspectorOverlay extends StatefulWidget {
   });
 
   @override
-  State<NetworkInspectorOverlay> createState() =>
-      _NetworkInspectorOverlayState();
+  State<HttpWatcherOverlay> createState() =>
+      _HttpWatcherOverlayState();
 }
 
-class _NetworkInspectorOverlayState extends State<NetworkInspectorOverlay> {
+class _HttpWatcherOverlayState extends State<HttpWatcherOverlay> {
   double _top = 120;
   double _right = 12;
 
   @override
   void initState() {
     super.initState();
-    NetworkLogger.instance.addListener(_refresh);
+    HttpWatcherLogger.instance.addListener(_refresh);
   }
 
   @override
   void dispose() {
-    NetworkLogger.instance.removeListener(_refresh);
+    HttpWatcherLogger.instance.removeListener(_refresh);
     super.dispose();
   }
 
@@ -85,12 +85,12 @@ class _NetworkInspectorOverlayState extends State<NetworkInspectorOverlay> {
               _right = (_right - d.delta.dx).clamp(0.0, size.width - 72);
             }),
             child: _InspectorButton(
-              count: NetworkLogger.instance.logs.length,
-              status: NetworkLogger.instance.networkStatus,
-              paused: !NetworkLogger.instance.enabled,
+              count: HttpWatcherLogger.instance.logs.length,
+              status: HttpWatcherLogger.instance.networkStatus,
+              paused: !HttpWatcherLogger.instance.enabled,
               onTap: () {
-                if (!NetworkLogger.instance.enabled) {
-                  NetworkLogger.instance.toggleEnabled();
+                if (!HttpWatcherLogger.instance.enabled) {
+                  HttpWatcherLogger.instance.toggleEnabled();
                   return;
                 }
                 final nav = widget.navigatorKey.currentState ??

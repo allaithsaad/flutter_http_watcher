@@ -2,21 +2,21 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../core/network_logger.dart';
 
-/// An [http.BaseClient] that automatically logs every request to [NetworkLogger].
+/// An [http.BaseClient] that automatically logs every request to [HttpWatcherLogger].
 ///
 /// ```dart
-/// final client = NetworkInspectorHttpClient();
+/// final client = HttpWatcherClient();
 /// final response = await client.get(Uri.parse('https://api.example.com/users'));
 /// ```
 ///
 /// Or wrap an existing client:
 /// ```dart
-/// final client = NetworkInspectorHttpClient(http.Client());
+/// final client = HttpWatcherClient(http.Client());
 /// ```
-class NetworkInspectorHttpClient extends http.BaseClient {
+class HttpWatcherClient extends http.BaseClient {
   final http.Client _inner;
 
-  NetworkInspectorHttpClient([http.Client? inner]) : _inner = inner ?? http.Client();
+  HttpWatcherClient([http.Client? inner]) : _inner = inner ?? http.Client();
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
@@ -32,7 +32,7 @@ class NetworkInspectorHttpClient extends http.BaseClient {
     final bytes = await streamed.stream.toBytes();
     final responseBody = utf8.decode(bytes, allowMalformed: true);
 
-    NetworkLogger.instance.logRequest(
+    HttpWatcherLogger.instance.logRequest(
       method: request.method,
       url: request.url.toString(),
       headers: Map<String, String>.from(request.headers),
