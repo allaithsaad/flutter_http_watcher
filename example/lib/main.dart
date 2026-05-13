@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter_network_inspector/network_inspector.dart';
+import 'package:flutter_http_watcher/network_inspector.dart';
 
 final navigatorKey = GlobalKey<NavigatorState>();
 

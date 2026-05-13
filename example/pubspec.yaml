@@ -31,7 +31,7 @@ dependencies:
   flutter:
     sdk: flutter
   cupertino_icons: ^1.0.8
-  flutter_network_inspector:
+  flutter_http_watcher:
     path: ../
 
 dev_dependencies:

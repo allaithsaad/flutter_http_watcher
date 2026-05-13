@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter_network_inspector/network_inspector.dart';
+import 'package:flutter_http_watcher/network_inspector.dart';
 
 void main() {
   test('NetworkLogger singleton is accessible', () {

@@ -1,6 +1,6 @@
 ## 1.0.0
 
-* Initial release of `flutter_network_inspector`.
+* Initial release of `flutter_http_watcher`.
 * `NetworkInspectorOverlay` — draggable floating button overlay with live connectivity dot.
 * `NetworkLogger` — singleton ChangeNotifier log store with pause/resume support.
 * `NetworkInspectorHttpClient` — automatic `http` package adapter.

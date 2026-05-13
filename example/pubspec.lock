@@ -126,6 +126,13 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
+  flutter_http_watcher:
+    dependency: "direct main"
+    description:
+      path: ".."
+      relative: true
+    source: path
+    version: "1.0.0"
   flutter_lints:
     dependency: "direct dev"
     description:
@@ -134,13 +141,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "6.0.0"
-  flutter_network_inspector:
-    dependency: "direct main"
-    description:
-      path: ".."
-      relative: true
-    source: path
-    version: "2.0.0"
   flutter_test:
     dependency: "direct dev"
     description: flutter
