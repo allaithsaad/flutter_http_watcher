@@ -49,7 +49,7 @@ Works with **any** HTTP client — `http`, `dio`, `retrofit`, `graphql`, or your
 
 ```yaml
 dependencies:
-  flutter_http_watcher: ^1.2.0
+  flutter_http_watcher: ^1.2.2
 ```
 
 ---

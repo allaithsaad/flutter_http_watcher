@@ -1,3 +1,7 @@
+## 1.2.2
+
+* Fix dependency conflict — widen `share_plus` constraint to `>=10.0.0 <14.0.0` so the package is compatible with `file_picker` and other packages that depend on `win32 ^5.x`.
+
 ## 1.2.1
 
 * Update screenshots and demo GIF in README.
