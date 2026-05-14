@@ -1,8 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../core/network_logger.dart';
 import '../model/network_log.dart';
 import 'inspector_detail.dart';
@@ -175,6 +177,130 @@ class _InspectorListScreenState extends State<InspectorListScreen> {
     );
   }
 
+  void _showWebViewerDialog(BuildContext context) {
+    final url = HttpWatcherLogger.instance.webServerUrl ?? '';
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: WatcherTheme.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: Row(
+          children: [
+            const Icon(
+              Icons.wifi_tethering,
+              color: Colors.greenAccent,
+              size: 20,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'Web Viewer',
+              style: TextStyle(color: WatcherTheme.textPrimary, fontSize: 16),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Open this URL in any browser on the same WiFi:',
+              style: TextStyle(color: WatcherTheme.textHint, fontSize: 13),
+            ),
+            const SizedBox(height: 12),
+            GestureDetector(
+              onTap: () {
+                Clipboard.setData(ClipboardData(text: url));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('URL copied'),
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: WatcherTheme.background,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: Colors.greenAccent.withValues(alpha: 0.4),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        url,
+                        style: const TextStyle(
+                          color: Colors.greenAccent,
+                          fontSize: 13,
+                          fontFamily: 'monospace',
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    const Icon(
+                      Icons.copy_outlined,
+                      color: Colors.greenAccent,
+                      size: 16,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Tap the URL to copy it',
+              style: TextStyle(color: WatcherTheme.textHint, fontSize: 11),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              await HttpWatcherLogger.instance.stopWebServer();
+              if (context.mounted) Navigator.pop(context);
+            },
+            child: const Text(
+              'Stop Server',
+              style: TextStyle(color: Colors.redAccent),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Close',
+              style: TextStyle(color: WatcherTheme.textPrimary),
+            ),
+          ),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.greenAccent.withValues(alpha: 0.15),
+            ),
+            icon: const Icon(
+              Icons.open_in_browser,
+              color: Colors.greenAccent,
+              size: 16,
+            ),
+            label: const Text(
+              'Open',
+              style: TextStyle(color: Colors.greenAccent),
+            ),
+            onPressed: () async {
+              final uri = Uri.tryParse(url);
+              if (uri != null) {
+                await launchUrl(uri, mode: LaunchMode.externalApplication);
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showMenu(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -204,6 +330,36 @@ class _InspectorListScreenState extends State<InspectorListScreen> {
                   Navigator.pop(context);
                   Navigator.of(context).push(InspectorStatsScreen.route());
                 },
+              ),
+              StatefulBuilder(
+                builder: (ctx, setSt) => _menuTile(
+                  icon: HttpWatcherLogger.instance.webServerRunning
+                      ? Icons.wifi_tethering
+                      : Icons.wifi_tethering_off_outlined,
+                  label: HttpWatcherLogger.instance.webServerRunning
+                      ? 'Web Viewer — Running'
+                      : 'Web Viewer',
+                  subtitle: HttpWatcherLogger.instance.webServerRunning
+                      ? (HttpWatcherLogger.instance.webServerUrl ?? '')
+                      : 'Open logs in any browser on the same WiFi',
+                  iconColor: HttpWatcherLogger.instance.webServerRunning
+                      ? Colors.greenAccent
+                      : WatcherTheme.iconColor,
+                  onTap: () async {
+                    if (HttpWatcherLogger.instance.webServerRunning) {
+                      Navigator.pop(context);
+                      _showWebViewerDialog(context);
+                    } else {
+                      final url = await HttpWatcherLogger.instance
+                          .startWebServer();
+                      setSt(() {});
+                      if (url != null && ctx.mounted) {
+                        Navigator.pop(context);
+                        _showWebViewerDialog(context);
+                      }
+                    }
+                  },
+                ),
               ),
               _menuTile(
                 icon: Icons.text_snippet_outlined,

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import '../model/network_log.dart';
+import 'watcher_web_server.dart';
 
 /// Current network connectivity state.
 enum NetworkStatus {
@@ -39,6 +40,7 @@ class HttpWatcherLogger extends ChangeNotifier {
   static final HttpWatcherLogger instance = HttpWatcherLogger._();
 
   final List<NetworkLog> _logs = [];
+  final _webServer = WatcherWebServer();
   int _counter = 0;
   Timer? _connectivityTimer;
 
@@ -137,6 +139,25 @@ class HttpWatcherLogger extends ChangeNotifier {
   /// Remove all stored logs.
   void clear() {
     _logs.clear();
+    notifyListeners();
+  }
+
+  /// Whether the web viewer server is currently running.
+  bool get webServerRunning => _webServer.isRunning;
+
+  /// Local network URL of the web viewer, or `null` if not started.
+  String? get webServerUrl => _webServer.url;
+
+  /// Starts the web viewer server and returns its URL, or `null` on failure.
+  Future<String?> startWebServer() async {
+    final url = await _webServer.start(() => _logs);
+    notifyListeners();
+    return url;
+  }
+
+  /// Stops the web viewer server.
+  Future<void> stopWebServer() async {
+    await _webServer.stop();
     notifyListeners();
   }
 
