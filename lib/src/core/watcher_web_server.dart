@@ -232,7 +232,7 @@ function show(i){
   var h='';
   var sum='URL:      '+l.url+NL+'Method:   '+l.method+NL+'Status:   '+(l.statusCode||'Error')+NL+'Duration: '+l.durationMs+'ms'+NL+'Time:     '+new Date(l.timestamp).toLocaleString();
   h+='<div class="sec"><div class="shdr"><span class="slbl">Summary</span>';
-  h+='<button class="cbtn" onclick="copy(all['+i+'].url,this)">Copy URL</button>';
+  h+='<button class="cbtn" onclick="copySum('+i+',this)">Copy</button>';
   h+='</div><pre>'+esc(sum)+'</pre></div>';
   h+='<div class="sec"><div class="shdr"><span class="slbl">cURL</span><button class="cbtn" onclick="copyCurl('+i+',this)">Copy</button></div><pre class="curl">'+esc(toCurl(l))+'</pre></div>';
   if(l.requestHeaders&&Object.keys(l.requestHeaders).length){
@@ -246,6 +246,7 @@ function show(i){
   document.getElementById('mbody').innerHTML=h;
   document.getElementById('modal').classList.add('open');
 }
+function copySum(i,btn){var l=all[i];var s='URL:      '+(l.url||'')+NL+'Method:   '+(l.method||'')+NL+'Status:   '+(l.statusCode||'Error')+NL+'Duration: '+(l.durationMs||0)+'ms'+NL+'Time:     '+new Date(l.timestamp).toLocaleString();copy(s,btn);}
 function copyCurl(i,btn){copy(toCurl(all[i]),btn);}
 function copyRH(i,btn){var l=all[i],s='';for(var k in l.requestHeaders){s+=k+': '+l.requestHeaders[k]+NL;}copy(s.trim(),btn);}
 function copyRB(i,btn){copy(pj(all[i].requestBody),btn);}

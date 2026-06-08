@@ -179,6 +179,7 @@ class _InspectorListScreenState extends State<InspectorListScreen> {
 
   void _showWebViewerDialog(BuildContext context) {
     final url = HttpWatcherLogger.instance.webServerUrl ?? '';
+    final isLoopback = url.contains('127.0.0.1');
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
@@ -202,8 +203,45 @@ class _InspectorListScreenState extends State<InspectorListScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (isLoopback) ...[
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: Colors.orange.withValues(alpha: 0.4),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.wifi_off_rounded,
+                      color: Colors.orange,
+                      size: 16,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Device not on WiFi — URL only works on this device.',
+                        style: TextStyle(
+                          color: Colors.orange.shade300,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
             Text(
-              'Open this URL in any browser on the same WiFi:',
+              isLoopback
+                  ? 'Open this URL on this device:'
+                  : 'Open this URL in any browser on the same WiFi:',
               style: TextStyle(color: WatcherTheme.textHint, fontSize: 13),
             ),
             const SizedBox(height: 12),
@@ -304,126 +342,136 @@ class _InspectorListScreenState extends State<InspectorListScreen> {
   void _showMenu(BuildContext context) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: WatcherTheme.surface,
+      backgroundColor: Colors.transparent,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
-      builder: (_) => SafeArea(
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 36,
-                height: 4,
-                margin: const EdgeInsets.symmetric(vertical: 10),
-                decoration: BoxDecoration(
-                  color: WatcherTheme.border,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              _menuTile(
-                icon: Icons.bar_chart_rounded,
-                label: 'Stats',
-                subtitle: 'Success rate, avg duration, top hosts',
-                onTap: () {
-                  Navigator.pop(context);
-                  Navigator.of(context).push(InspectorStatsScreen.route());
-                },
-              ),
-              StatefulBuilder(
-                builder: (ctx, setSt) => _menuTile(
-                  icon: HttpWatcherLogger.instance.webServerRunning
-                      ? Icons.wifi_tethering
-                      : Icons.wifi_tethering_off_outlined,
-                  label: HttpWatcherLogger.instance.webServerRunning
-                      ? 'Web Viewer — Running'
-                      : 'Web Viewer',
-                  subtitle: HttpWatcherLogger.instance.webServerRunning
-                      ? (HttpWatcherLogger.instance.webServerUrl ?? '')
-                      : 'Open logs in any browser on the same WiFi',
-                  iconColor: HttpWatcherLogger.instance.webServerRunning
-                      ? Colors.greenAccent
-                      : WatcherTheme.iconColor,
-                  onTap: () async {
-                    if (HttpWatcherLogger.instance.webServerRunning) {
+      builder: (_) => StatefulBuilder(
+        builder: (ctx, setSt) => Material(
+          color: WatcherTheme.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+          child: SafeArea(
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 36,
+                    height: 4,
+                    margin: const EdgeInsets.symmetric(vertical: 10),
+                    decoration: BoxDecoration(
+                      color: WatcherTheme.border,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  _menuTile(
+                    icon: Icons.bar_chart_rounded,
+                    label: 'Stats',
+                    subtitle: 'Success rate, avg duration, top hosts',
+                    onTap: () {
                       Navigator.pop(context);
-                      _showWebViewerDialog(context);
-                    } else {
-                      final url = await HttpWatcherLogger.instance
-                          .startWebServer();
-                      setSt(() {});
-                      if (url != null && ctx.mounted) {
+                      Navigator.of(context).push(InspectorStatsScreen.route());
+                    },
+                  ),
+                  _menuTile(
+                    icon: HttpWatcherLogger.instance.webServerRunning
+                        ? Icons.wifi_tethering
+                        : Icons.wifi_tethering_off_outlined,
+                    label: HttpWatcherLogger.instance.webServerRunning
+                        ? 'Web Viewer — Running'
+                        : 'Web Viewer',
+                    subtitle: HttpWatcherLogger.instance.webServerRunning
+                        ? (HttpWatcherLogger.instance.webServerUrl ?? '')
+                        : 'Open logs in any browser on the same WiFi',
+                    iconColor: HttpWatcherLogger.instance.webServerRunning
+                        ? Colors.greenAccent
+                        : WatcherTheme.iconColor,
+                    onTap: () async {
+                      if (HttpWatcherLogger.instance.webServerRunning) {
                         Navigator.pop(context);
                         _showWebViewerDialog(context);
+                      } else {
+                        final url = await HttpWatcherLogger.instance
+                            .startWebServer();
+                        if (!context.mounted) return;
+                        setSt(() {});
+                        if (url != null) {
+                          Navigator.pop(context);
+                          _showWebViewerDialog(context);
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Could not start web server. Check network permissions.',
+                              ),
+                              duration: Duration(seconds: 3),
+                            ),
+                          );
+                        }
                       }
-                    }
-                  },
-                ),
+                    },
+                  ),
+                  _menuTile(
+                    icon: Icons.text_snippet_outlined,
+                    label: 'Save as .txt',
+                    subtitle: 'Export all logs as a plain text file',
+                    onTap: () {
+                      Navigator.pop(context);
+                      _saveToFile();
+                    },
+                  ),
+                  _menuTile(
+                    icon: Icons.code_rounded,
+                    label: 'Export as .har',
+                    subtitle: 'Import into Postman, Charles, or DevTools',
+                    onTap: () {
+                      Navigator.pop(context);
+                      _exportHar();
+                    },
+                  ),
+                  _menuTile(
+                    icon: WatcherTheme.isDark
+                        ? Icons.light_mode_outlined
+                        : Icons.dark_mode_outlined,
+                    label: WatcherTheme.isDark ? 'Light mode' : 'Dark mode',
+                    subtitle: 'Toggle inspector theme',
+                    onTap: () {
+                      HttpWatcherLogger.instance.toggleTheme();
+                      setSt(() {});
+                    },
+                  ),
+                  _menuTile(
+                    icon: HttpWatcherLogger.instance.enabled
+                        ? Icons.pause_circle_outline
+                        : Icons.play_circle_outline,
+                    label: HttpWatcherLogger.instance.enabled
+                        ? 'Pause logging'
+                        : 'Resume logging',
+                    subtitle: HttpWatcherLogger.instance.enabled
+                        ? 'Stop capturing new requests'
+                        : 'Start capturing requests again',
+                    iconColor: HttpWatcherLogger.instance.enabled
+                        ? WatcherTheme.iconColor
+                        : Colors.greenAccent,
+                    onTap: () {
+                      HttpWatcherLogger.instance.toggleEnabled();
+                      setSt(() {});
+                    },
+                  ),
+                  _menuTile(
+                    icon: Icons.delete_outline,
+                    label: 'Clear all',
+                    subtitle: 'Remove all logged requests',
+                    iconColor: Colors.redAccent,
+                    onTap: () {
+                      Navigator.pop(context);
+                      HttpWatcherLogger.instance.clear();
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                ],
               ),
-              _menuTile(
-                icon: Icons.text_snippet_outlined,
-                label: 'Save as .txt',
-                subtitle: 'Export all logs as a plain text file',
-                onTap: () {
-                  Navigator.pop(context);
-                  _saveToFile();
-                },
-              ),
-              _menuTile(
-                icon: Icons.code_rounded,
-                label: 'Export as .har',
-                subtitle: 'Import into Postman, Charles, or DevTools',
-                onTap: () {
-                  Navigator.pop(context);
-                  _exportHar();
-                },
-              ),
-              StatefulBuilder(
-                builder: (ctx, setSt) => _menuTile(
-                  icon: WatcherTheme.isDark
-                      ? Icons.light_mode_outlined
-                      : Icons.dark_mode_outlined,
-                  label: WatcherTheme.isDark ? 'Light mode' : 'Dark mode',
-                  subtitle: 'Toggle inspector theme',
-                  onTap: () {
-                    HttpWatcherLogger.instance.toggleTheme();
-                    setSt(() {});
-                  },
-                ),
-              ),
-              StatefulBuilder(
-                builder: (ctx, setSt) => _menuTile(
-                  icon: HttpWatcherLogger.instance.enabled
-                      ? Icons.pause_circle_outline
-                      : Icons.play_circle_outline,
-                  label: HttpWatcherLogger.instance.enabled
-                      ? 'Pause logging'
-                      : 'Resume logging',
-                  subtitle: HttpWatcherLogger.instance.enabled
-                      ? 'Stop capturing new requests'
-                      : 'Start capturing requests again',
-                  iconColor: HttpWatcherLogger.instance.enabled
-                      ? WatcherTheme.iconColor
-                      : Colors.greenAccent,
-                  onTap: () {
-                    HttpWatcherLogger.instance.toggleEnabled();
-                    setSt(() {});
-                  },
-                ),
-              ),
-              _menuTile(
-                icon: Icons.delete_outline,
-                label: 'Clear all',
-                subtitle: 'Remove all logged requests',
-                iconColor: Colors.redAccent,
-                onTap: () {
-                  Navigator.pop(context);
-                  HttpWatcherLogger.instance.clear();
-                },
-              ),
-              const SizedBox(height: 8),
-            ],
+            ),
           ),
         ),
       ),

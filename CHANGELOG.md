@@ -1,3 +1,10 @@
+## 1.2.3
+
+* Fix options bottom sheet appearing white in dark mode — background is now always rendered via `Material` so Flutter's Material 3 theme cannot override it.
+* Fix Web Viewer button doing nothing when tapped — mounted check now uses the correct context, and a snackbar is shown if the server fails to start.
+* Fix Web Viewer showing `127.0.0.1` without explanation — dialog now shows a warning when the device is not on WiFi.
+* Fix Web Viewer Summary copy returning `undefined` — "Copy URL" replaced with "Copy" which copies the full summary block (URL, method, status, duration, time).
+
 ## 1.2.2
 
 * Fix dependency conflict — widen `share_plus` constraint to `>=10.0.0 <14.0.0` so the package is compatible with `file_picker` and other packages that depend on `win32 ^5.x`.
