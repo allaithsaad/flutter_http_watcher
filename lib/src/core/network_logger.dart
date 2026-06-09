@@ -148,6 +148,12 @@ class HttpWatcherLogger extends ChangeNotifier {
   /// Local network URL of the web viewer, or `null` if not started.
   String? get webServerUrl => _webServer.url;
 
+  /// True if the server started on loopback (127.0.0.1) — not reachable from other devices.
+  bool get webServerIsLoopback => _webServer.isLoopback;
+
+  /// The last error from [startWebServer], or `null` if it succeeded.
+  String? get webServerLastError => _webServer.lastError;
+
   /// Starts the web viewer server and returns its URL, or `null` on failure.
   Future<String?> startWebServer() async {
     final url = await _webServer.start(() => _logs);

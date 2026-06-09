@@ -5,19 +5,24 @@ import '../model/network_log.dart';
 class WatcherWebServer {
   HttpServer? _server;
   String? _url;
+  String? _lastError;
 
   String? get url => _url;
   bool get isRunning => _server != null;
+  String? get lastError => _lastError;
+  bool get isLoopback => _url != null && _url!.contains('://127.0.0.1');
 
   Future<String?> start(List<NetworkLog> Function() getLogs) async {
     if (_server != null) return _url;
+    _lastError = null;
     try {
       final ip = await _localIp();
       _server = await HttpServer.bind(ip, 9742, shared: true);
       _url = 'http://$ip:9742';
       _serve(getLogs);
       return _url;
-    } catch (_) {
+    } catch (e) {
+      _lastError = e.toString();
       return null;
     }
   }

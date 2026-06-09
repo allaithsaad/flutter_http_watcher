@@ -1,3 +1,9 @@
+## 1.2.4
+
+* Improve web server error reporting — failure snackbar now shows the actual exception instead of a generic message.
+* Warn when web server binds to loopback (`127.0.0.1`) — a snackbar explains the server is only accessible on the current device.
+* Show error and warning snackbars at the top of the screen instead of the bottom.
+
 ## 1.2.3
 
 * Fix options bottom sheet appearing white in dark mode — background is now always rendered via `Material` so Flutter's Material 3 theme cannot override it.

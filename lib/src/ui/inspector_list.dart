@@ -177,6 +177,38 @@ class _InspectorListScreenState extends State<InspectorListScreen> {
     );
   }
 
+  void _showTopSnackBar(
+    BuildContext context,
+    String message, {
+    Duration duration = const Duration(seconds: 5),
+  }) {
+    final overlay = Overlay.of(context);
+    late OverlayEntry entry;
+    entry = OverlayEntry(
+      builder: (ctx) => Positioned(
+        top: MediaQuery.of(ctx).padding.top + 8,
+        left: 16,
+        right: 16,
+        child: Material(
+          elevation: 6,
+          borderRadius: BorderRadius.circular(8),
+          color: const Color(0xFF323232),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Text(
+              message,
+              style: const TextStyle(color: Colors.white, fontSize: 14),
+            ),
+          ),
+        ),
+      ),
+    );
+    overlay.insert(entry);
+    Future.delayed(duration, () {
+      if (entry.mounted) entry.remove();
+    });
+  }
+
   void _showWebViewerDialog(BuildContext context) {
     final url = HttpWatcherLogger.instance.webServerUrl ?? '';
     final isLoopback = url.contains('127.0.0.1');
@@ -396,16 +428,22 @@ class _InspectorListScreenState extends State<InspectorListScreen> {
                         if (!context.mounted) return;
                         setSt(() {});
                         if (url != null) {
+                          if (HttpWatcherLogger.instance.webServerIsLoopback) {
+                            _showTopSnackBar(
+                              context,
+                              'Server started on 127.0.0.1 — only accessible on this device. Check WiFi/network permissions for LAN access.',
+                            );
+                          }
                           Navigator.pop(context);
                           _showWebViewerDialog(context);
                         } else {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'Could not start web server. Check network permissions.',
-                              ),
-                              duration: Duration(seconds: 3),
-                            ),
+                          final err =
+                              HttpWatcherLogger.instance.webServerLastError;
+                          _showTopSnackBar(
+                            context,
+                            err != null
+                                ? 'Could not start web server: $err'
+                                : 'Could not start web server. Check network permissions.',
                           );
                         }
                       }
