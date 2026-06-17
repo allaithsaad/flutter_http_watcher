@@ -1,3 +1,7 @@
+## 1.2.5
+
+* Web Viewer now auto-selects a free port — if `9742` is already in use (e.g. a second app instance is running), it scans upward (`9743`, `9744`, … up to `9761`) for the first available port, so multiple apps can run their viewers at once. Each instance binds its own socket (`shared: false`) and the chosen port is shown in the URL.
+
 ## 1.2.4
 
 * Improve web server error reporting — failure snackbar now shows the actual exception instead of a generic message.

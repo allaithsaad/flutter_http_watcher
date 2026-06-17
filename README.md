@@ -294,7 +294,7 @@ print(HttpWatcherLogger.instance.webServerUrl); // http://192.168.x.x:9742
 await HttpWatcherLogger.instance.stopWebServer();
 ```
 
-> **Note:** The web viewer runs on port `9742`. Make sure your device firewall allows connections on that port.
+> **Note:** The web viewer runs on port `9742` by default. If that port is already in use (e.g. a second app instance is running), it automatically scans upward (`9743`, `9744`, …) for the first free port — so you can run several apps at once, each with its own viewer. The chosen port is shown in the URL. Make sure your device firewall allows connections on that port range.
 
 ---
 

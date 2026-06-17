@@ -3,11 +3,20 @@ import 'dart:io';
 import '../model/network_log.dart';
 
 class WatcherWebServer {
+  /// First port to try. If it is already in use (e.g. another app instance is
+  /// already running a viewer), the server scans upward for a free one.
+  static const int basePort = 9742;
+
+  /// How many consecutive ports to try before giving up.
+  static const int portRange = 20;
+
   HttpServer? _server;
   String? _url;
   String? _lastError;
+  int? _port;
 
   String? get url => _url;
+  int? get port => _port;
   bool get isRunning => _server != null;
   String? get lastError => _lastError;
   bool get isLoopback => _url != null && _url!.contains('://127.0.0.1');
@@ -17,8 +26,15 @@ class WatcherWebServer {
     _lastError = null;
     try {
       final ip = await _localIp();
-      _server = await HttpServer.bind(ip, 9742, shared: true);
-      _url = 'http://$ip:9742';
+      final server = await _bindFreePort(ip);
+      if (server == null) {
+        _lastError =
+            'No free port available in range $basePort-${basePort + portRange - 1}';
+        return null;
+      }
+      _server = server;
+      _port = server.port;
+      _url = 'http://$ip:$_port';
       _serve(getLogs);
       return _url;
     } catch (e) {
@@ -27,10 +43,27 @@ class WatcherWebServer {
     }
   }
 
+  /// Tries [basePort], then each subsequent port, returning the first one that
+  /// binds successfully. `shared: false` ensures each app instance gets its own
+  /// socket instead of silently sharing the same port. Returns null if every
+  /// port in the range is taken.
+  Future<HttpServer?> _bindFreePort(String ip) async {
+    for (var p = basePort; p < basePort + portRange; p++) {
+      try {
+        return await HttpServer.bind(ip, p, shared: false);
+      } on SocketException {
+        // Port in use — try the next one.
+        continue;
+      }
+    }
+    return null;
+  }
+
   Future<void> stop() async {
     await _server?.close(force: true);
     _server = null;
     _url = null;
+    _port = null;
   }
 
   void _serve(List<NetworkLog> Function() getLogs) {
