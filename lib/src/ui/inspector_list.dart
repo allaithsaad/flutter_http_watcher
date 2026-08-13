@@ -548,6 +548,7 @@ class _InspectorListScreenState extends State<InspectorListScreen> {
   }
 
   Color _statusColor(NetworkLog log) {
+    if (log.isPending) return const Color(0xFF61AFEF);
     if (log.isSuccess) return Colors.green;
     if (log.isClientError) return Colors.orange;
     if (log.isServerError) return Colors.red;
@@ -750,16 +751,28 @@ class _InspectorListScreenState extends State<InspectorListScreen> {
                               Column(
                                 crossAxisAlignment: CrossAxisAlignment.end,
                                 children: [
-                                  Text(
-                                    '${log.statusCode ?? "ERR"}',
-                                    style: TextStyle(
-                                      color: _statusColor(log),
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.bold,
+                                  if (log.isPending)
+                                    SizedBox(
+                                      width: 13,
+                                      height: 13,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        valueColor: AlwaysStoppedAnimation(
+                                          _statusColor(log),
+                                        ),
+                                      ),
+                                    )
+                                  else
+                                    Text(
+                                      '${log.statusCode ?? "ERR"}',
+                                      style: TextStyle(
+                                        color: _statusColor(log),
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.bold,
+                                      ),
                                     ),
-                                  ),
                                   Text(
-                                    '${log.durationMs}ms',
+                                    log.isPending ? 'pending' : '${log.durationMs}ms',
                                     style: TextStyle(
                                       color: WatcherTheme.textHint,
                                       fontSize: 11,

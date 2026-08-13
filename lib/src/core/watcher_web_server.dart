@@ -74,6 +74,7 @@ class WatcherWebServer {
                   'method': l.method,
                   'url': l.url,
                   'statusCode': l.statusCode,
+                  'pending': l.pending,
                   'durationMs': l.durationMs,
                   'timestamp': l.timestamp.toIso8601String(),
                   'requestHeaders': l.requestHeaders,
@@ -149,7 +150,9 @@ tr:hover td{background:#1a1a2e;cursor:pointer}
 .GET{color:#61afef}.POST{color:#98c379}.PUT{color:#e5c07b}.DELETE{color:#e06c75}.OTHER{color:rgba(255,255,255,.5)}
 .path{color:#fff}.host{color:rgba(255,255,255,.3);font-size:11px;margin-top:2px}
 .st{font-weight:700}
-.s2{color:#4caf50}.s4{color:#ff9800}.s5{color:#f44336}.se{color:#9e9e9e}
+.s2{color:#4caf50}.s4{color:#ff9800}.s5{color:#f44336}.se{color:#9e9e9e}.sp{color:#61afef}
+.spin{display:inline-block;width:11px;height:11px;border:2px solid rgba(97,175,239,.3);border-top-color:#61afef;border-radius:50%;animation:sp .8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
 .dur{color:rgba(255,255,255,.3);font-size:11px}
 .empty{text-align:center;padding:80px 20px;color:rgba(255,255,255,.25)}
 .modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:100;padding:20px;overflow-y:auto}
@@ -235,6 +238,7 @@ function applyF(){
   logs=all.filter(function(l){
     if(mf&&l.method!==mf)return false;
     if(sf){
+      if(l.pending)return false;
       var s=l.statusCode;
       if(sf==='2xx'&&!(s>=200&&s<300))return false;
       if(sf==='4xx'&&!(s>=400&&s<500))return false;
@@ -257,8 +261,13 @@ function renderT(){
     t+='<tr onclick="show('+idx+')">';
     t+='<td><span class="'+mc(l.method)+'">'+l.method+'</span></td>';
     t+='<td><div class="path">'+esc(path)+'</div><div class="host">'+esc(host)+'</div></td>';
-    t+='<td><span class="'+sc(l.statusCode)+'">'+(l.statusCode||'ERR')+'</span></td>';
-    t+='<td><span class="dur">'+l.durationMs+'ms</span></td></tr>';
+    if(l.pending){
+      t+='<td><span class="spin"></span></td>';
+      t+='<td><span class="dur">pending</span></td></tr>';
+    }else{
+      t+='<td><span class="'+sc(l.statusCode)+'">'+(l.statusCode||'ERR')+'</span></td>';
+      t+='<td><span class="dur">'+l.durationMs+'ms</span></td></tr>';
+    }
   }
   t+='</tbody></table>';
   document.getElementById('root').innerHTML=t;
@@ -268,7 +277,9 @@ function show(i){
   var l=all[i];if(!l)return;
   document.getElementById('mtitle').textContent=l.method+' '+l.url;
   var h='';
-  var sum='URL:      '+l.url+NL+'Method:   '+l.method+NL+'Status:   '+(l.statusCode||'Error')+NL+'Duration: '+l.durationMs+'ms'+NL+'Time:     '+new Date(l.timestamp).toLocaleString();
+  var st=l.pending?'Pending…':(l.statusCode||'Error');
+  var du=l.pending?'—':(l.durationMs+'ms');
+  var sum='URL:      '+l.url+NL+'Method:   '+l.method+NL+'Status:   '+st+NL+'Duration: '+du+NL+'Time:     '+new Date(l.timestamp).toLocaleString();
   h+='<div class="sec"><div class="shdr"><span class="slbl">Summary</span>';
   h+='<button class="cbtn" onclick="copySum('+i+',this)">Copy</button>';
   h+='</div><pre>'+esc(sum)+'</pre></div>';
@@ -280,7 +291,8 @@ function show(i){
   if(l.requestBody){
     h+='<div class="sec"><div class="shdr"><span class="slbl">Request Body</span><button class="cbtn" onclick="copyRB('+i+',this)">Copy</button></div><pre>'+esc(pj(l.requestBody))+'</pre></div>';
   }
-  h+='<div class="sec"><div class="shdr"><span class="slbl">Response Body</span><button class="cbtn" onclick="copyResp('+i+',this)">Copy</button></div><pre>'+esc(pj(l.responseBody||''))+'</pre></div>';
+  var resp=l.pending?'(waiting for response…)':pj(l.responseBody||'');
+  h+='<div class="sec"><div class="shdr"><span class="slbl">Response Body</span><button class="cbtn" onclick="copyResp('+i+',this)">Copy</button></div><pre>'+esc(resp)+'</pre></div>';
   document.getElementById('mbody').innerHTML=h;
   document.getElementById('modal').classList.add('open');
 }

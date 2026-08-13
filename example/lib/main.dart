@@ -56,43 +56,65 @@ class _WatcherHttpClient extends http.BaseClient {
 }
 
 // ─── dio interceptor ─────────────────────────────────────────────────────────
+// Demonstrates the two-phase API: the request shows up in the inspector as
+// "pending" the moment it's sent (onRequest), then fills in when the response
+// or error arrives. Duration is computed by the logger — no manual timestamps.
 class _WatcherDioInterceptor extends dio_pkg.Interceptor {
-  final _starts = <int, DateTime>{};
+  final _ids = <int, String>{};
 
   @override
   void onRequest(dio_pkg.RequestOptions o, dio_pkg.RequestInterceptorHandler h) {
-    _starts[o.hashCode] = DateTime.now();
+    final id = HttpWatcherLogger.instance.logRequestStart(
+      method: o.method,
+      url: o.uri.toString(),
+      headers: o.headers.map((k, v) => MapEntry(k, v.toString())),
+      body: o.data,
+    );
+    if (id != null) _ids[o.hashCode] = id;
     h.next(o);
   }
 
   @override
   void onResponse(dio_pkg.Response r, dio_pkg.ResponseInterceptorHandler h) {
-    final start = _starts.remove(r.requestOptions.hashCode) ?? DateTime.now();
-    HttpWatcherLogger.instance.logRequest(
-      method: r.requestOptions.method,
-      url: r.requestOptions.uri.toString(),
-      headers: r.requestOptions.headers.map((k, v) => MapEntry(k, v.toString())),
-      body: r.requestOptions.data,
-      statusCode: r.statusCode ?? 0,
-      responseBody: r.data?.toString() ?? '',
-      startTime: start,
-    );
+    final id = _ids.remove(r.requestOptions.hashCode);
+    if (id != null) {
+      HttpWatcherLogger.instance.logResponse(
+        id: id,
+        statusCode: r.statusCode ?? 0,
+        responseBody: r.data?.toString() ?? '',
+      );
+    }
     h.next(r);
   }
 
   @override
   void onError(dio_pkg.DioException e, dio_pkg.ErrorInterceptorHandler h) {
-    final start = _starts.remove(e.requestOptions.hashCode) ?? DateTime.now();
-    HttpWatcherLogger.instance.logRequest(
-      method: e.requestOptions.method,
-      url: e.requestOptions.uri.toString(),
-      headers: e.requestOptions.headers.map((k, v) => MapEntry(k, v.toString())),
-      body: e.requestOptions.data,
-      statusCode: e.response?.statusCode ?? 0,
-      responseBody: e.response?.data?.toString() ?? e.message ?? '',
-      startTime: start,
-    );
+    final id = _ids.remove(e.requestOptions.hashCode);
+    if (id != null) {
+      HttpWatcherLogger.instance.logResponse(
+        id: id,
+        statusCode: e.response?.statusCode ?? 0,
+        responseBody: e.response?.data?.toString() ?? e.message ?? '',
+      );
+    }
     h.next(e);
+  }
+}
+
+// ─── artificial delay interceptor (demo only) ────────────────────────────────
+// Holds a request for `extra['delayMs']` before it goes out, so the *pending*
+// state stays on screen long enough to watch. Registered AFTER the watcher
+// interceptor so the entry is logged — and the spinner appears — before the
+// wait starts. Not something you'd ship.
+class _DelayInterceptor extends dio_pkg.Interceptor {
+  @override
+  void onRequest(dio_pkg.RequestOptions o, dio_pkg.RequestInterceptorHandler h) {
+    final ms = o.extra['delayMs'] as int?;
+    if (ms == null) {
+      h.next(o);
+      return;
+    }
+    Future.delayed(Duration(milliseconds: ms), () => h.next(o));
   }
 }
 
@@ -196,7 +218,8 @@ class _DioTab extends StatefulWidget {
 
 class _DioTabState extends State<_DioTab> with AutomaticKeepAliveClientMixin {
   late final dio_pkg.Dio _dio = dio_pkg.Dio()
-    ..interceptors.add(_WatcherDioInterceptor());
+    ..interceptors.add(_WatcherDioInterceptor())
+    ..interceptors.add(_DelayInterceptor());
   final List<String> _results = [];
   bool _loading = false;
 
@@ -210,6 +233,27 @@ class _DioTabState extends State<_DioTab> with AutomaticKeepAliveClientMixin {
       setState(() => _results.insert(0, '[$label] Error: $e'));
     } finally {
       setState(() => _loading = false);
+    }
+  }
+
+  /// Slow request — the inspector shows it as *pending* with a spinner for
+  /// [seconds], then fills in the status and duration in place.
+  ///
+  /// Deliberately does **not** set `_loading`, so you can tap it several times
+  /// in a row and watch multiple pending rows stack up in the inspector.
+  Future<void> _slow(int seconds) async {
+    final label = 'GET slow ${seconds}s';
+    try {
+      final res = await _dio.get(
+        'https://jsonplaceholder.typicode.com/posts/1',
+        options: dio_pkg.Options(extra: {'delayMs': seconds * 1000}),
+      );
+      if (!mounted) return;
+      setState(() =>
+          _results.insert(0, '[$label] ${res.statusCode} — ${_preview(res.data)}'));
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _results.insert(0, '[$label] Error: $e'));
     }
   }
 
@@ -244,6 +288,8 @@ class _DioTabState extends State<_DioTab> with AutomaticKeepAliveClientMixin {
         _Btn('GET /post/1', () => _get('GET /post/1', 'https://jsonplaceholder.typicode.com/posts/1'), _loading),
         _Btn('GET 404', () => _get('GET 404', 'https://jsonplaceholder.typicode.com/posts/99999'), _loading),
         _Btn('POST /posts', _post, _loading, primary: true),
+        // Stays enabled while others run — tap a few times to stack pending rows.
+        _Btn('GET slow 5s ⏳', () => _slow(5), false),
       ],
     );
   }
@@ -283,6 +329,45 @@ class _ManualTabState extends State<_ManualTab> with AutomaticKeepAliveClientMix
     }
   }
 
+  /// Two-phase manual logging, with an artificial delay so you can watch it.
+  ///
+  /// Phase 1 (`logRequestStart`) puts the entry in the inspector immediately,
+  /// marked pending. Phase 2 (`logResponse` / `failRequest`) updates that same
+  /// entry in place — no second row — and the duration is computed from when
+  /// phase 1 ran.
+  Future<void> _slowManual({bool fail = false}) async {
+    const url = 'https://jsonplaceholder.typicode.com/todos?_limit=5';
+    final label = fail ? 'Manual slow → fail' : 'Manual slow 4s';
+
+    final id = HttpWatcherLogger.instance.logRequestStart(
+      method: 'GET',
+      url: url,
+      headers: const {'X-Demo': 'two-phase'},
+    );
+
+    try {
+      await Future.delayed(const Duration(seconds: 4)); // artificial delay
+      if (fail) throw Exception('Simulated network failure');
+      final res = await _client.get(Uri.parse(url));
+      if (id != null) {
+        HttpWatcherLogger.instance.logResponse(
+          id: id,
+          statusCode: res.statusCode,
+          responseBody: res.body,
+        );
+      }
+      if (!mounted) return;
+      final preview = _preview(jsonDecode(res.body));
+      setState(() => _results.insert(0, '[$label] ${res.statusCode} — $preview'));
+    } catch (e) {
+      if (id != null) {
+        HttpWatcherLogger.instance.failRequest(id: id, error: e.toString());
+      }
+      if (!mounted) return;
+      setState(() => _results.insert(0, '[$label] Error: $e'));
+    }
+  }
+
   @override
   bool get wantKeepAlive => true;
 
@@ -297,6 +382,9 @@ class _ManualTabState extends State<_ManualTab> with AutomaticKeepAliveClientMix
         _Btn('GET /users', () => _get('GET /users', 'https://jsonplaceholder.typicode.com/users'), _loading),
         _Btn('GET /todos', () => _get('GET /todos', 'https://jsonplaceholder.typicode.com/todos?_limit=5'), _loading),
         _Btn('GET 404', () => _get('GET 404', 'https://jsonplaceholder.typicode.com/posts/99999'), _loading),
+        // Both stay enabled while others run, so pending rows can pile up.
+        _Btn('Slow 4s ⏳', _slowManual, false),
+        _Btn('Slow 4s → fail ⏳', () => _slowManual(fail: true), false),
       ],
     );
   }

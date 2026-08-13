@@ -60,7 +60,9 @@ class HttpWatcherLogger extends ChangeNotifier {
   List<NetworkLog> get logs => List.unmodifiable(_logs);
 
   /// Count of error responses: 4xx, 5xx, network failures, or status 0.
+  /// Requests still in flight (pending) are not counted.
   int get errorCount => _logs.where((l) {
+        if (l.pending) return false;
         final s = l.statusCode;
         return s == null || s == 0 || s >= 400;
       }).length;
@@ -122,6 +124,84 @@ class HttpWatcherLogger extends ChangeNotifier {
     );
     if (_logs.length > maxEntries) _logs.removeLast();
     notifyListeners();
+  }
+
+  /// Log the **start** of an HTTP request, before the response arrives.
+  ///
+  /// The entry appears immediately in the inspector marked as *pending*. Pass
+  /// the returned id to [logResponse] (or [failRequest]) once the request
+  /// completes to fill in the status, body, and duration.
+  ///
+  /// Returns the new log's id, or `null` when [enabled] is `false`.
+  ///
+  /// ```dart
+  /// final id = HttpWatcherLogger.instance.logRequestStart(
+  ///   method: 'GET',
+  ///   url: uri.toString(),
+  /// );
+  /// final res = await http.get(uri);
+  /// HttpWatcherLogger.instance.logResponse(
+  ///   id: id!,
+  ///   statusCode: res.statusCode,
+  ///   responseBody: res.body,
+  /// );
+  /// ```
+  String? logRequestStart({
+    required String method,
+    required String url,
+    Map<String, String>? headers,
+    dynamic body,
+    DateTime? startTime,
+  }) {
+    if (!enabled) return null;
+    final id = '${++_counter}';
+    _logs.insert(
+      0,
+      NetworkLog(
+        id: id,
+        method: method.toUpperCase(),
+        url: url,
+        requestHeaders: headers,
+        requestBody: body,
+        timestamp: startTime ?? DateTime.now(),
+        pending: true,
+      ),
+    );
+    if (_logs.length > maxEntries) _logs.removeLast();
+    notifyListeners();
+    return id;
+  }
+
+  /// Complete a pending request previously created by [logRequestStart].
+  ///
+  /// Fills in the response and computes the duration from the entry's start
+  /// time. No-op if no pending entry with [id] exists (it may have been cleared
+  /// or evicted). Pass `statusCode: null` for a failed request.
+  void logResponse({
+    required String id,
+    int? statusCode,
+    String? responseBody,
+  }) {
+    final log = _logByIdOrNull(id);
+    if (log == null) return;
+    log.statusCode = statusCode;
+    log.responseBody = responseBody;
+    log.durationMs = DateTime.now().difference(log.timestamp).inMilliseconds;
+    log.pending = false;
+    notifyListeners();
+  }
+
+  /// Mark a pending request as failed (no status code), e.g. on a network
+  /// exception. Convenience wrapper over [logResponse].
+  void failRequest({required String id, String? error}) {
+    logResponse(id: id, statusCode: null, responseBody: error);
+  }
+
+  NetworkLog? _logByIdOrNull(String id) {
+    for (final l in _logs) {
+      if (l.id == id) return l;
+    }
+    return null;
   }
 
   /// Toggle request logging on/off.

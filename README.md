@@ -49,7 +49,7 @@ Works with **any** HTTP client — `http`, `dio`, `retrofit`, `graphql`, or your
 
 ```yaml
 dependencies:
-  flutter_http_watcher: ^1.2.2
+  flutter_http_watcher: ^1.3.0
 ```
 
 ---
@@ -197,6 +197,33 @@ HttpWatcherLogger.instance.logRequest(
   startTime: start,
 );
 ```
+
+#### Show the request before the response arrives (two-phase)
+
+To make a request appear in the inspector **the instant it's sent** — shown with a
+spinner as *pending* — and then fill in the response when it completes, log it in
+two steps. This is handy for slow or long-running requests:
+
+```dart
+final id = HttpWatcherLogger.instance.logRequestStart(
+  method: 'GET',
+  url: uri.toString(),
+  headers: headers,
+);
+
+try {
+  final response = await myClient.get(uri);
+  HttpWatcherLogger.instance.logResponse(
+    id: id!,
+    statusCode: response.statusCode,
+    responseBody: response.body,
+  );
+} catch (e) {
+  HttpWatcherLogger.instance.failRequest(id: id!, error: e.toString());
+}
+```
+
+The duration is computed automatically from when `logRequestStart` was called.
 
 ---
 

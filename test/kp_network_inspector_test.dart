@@ -96,6 +96,74 @@ void main() {
       HttpWatcherLogger.instance.toggleTheme();
       expect(HttpWatcherLogger.instance.isDark, initial);
     });
+
+    test('logRequestStart adds a pending entry', () {
+      final id = HttpWatcherLogger.instance.logRequestStart(
+        method: 'get',
+        url: 'https://example.com/test',
+      );
+      expect(id, isNotNull);
+      final log = HttpWatcherLogger.instance.logs.first;
+      expect(log.isPending, isTrue);
+      expect(log.method, 'GET');
+      expect(log.statusCode, isNull);
+      expect(log.isFailed, isFalse, reason: 'pending is not failed');
+    });
+
+    test('logResponse completes a pending entry in place', () {
+      final id = HttpWatcherLogger.instance.logRequestStart(
+        method: 'GET',
+        url: 'https://example.com/test',
+      )!;
+      HttpWatcherLogger.instance.logResponse(
+        id: id,
+        statusCode: 200,
+        responseBody: '{"ok":true}',
+      );
+      expect(HttpWatcherLogger.instance.logs.length, 1,
+          reason: 'updates in place, no new entry');
+      final log = HttpWatcherLogger.instance.logs.first;
+      expect(log.isPending, isFalse);
+      expect(log.statusCode, 200);
+      expect(log.responseBody, '{"ok":true}');
+      expect(log.isSuccess, isTrue);
+    });
+
+    test('failRequest marks a pending entry failed', () {
+      final id = HttpWatcherLogger.instance.logRequestStart(
+        method: 'GET',
+        url: 'https://example.com/test',
+      )!;
+      HttpWatcherLogger.instance.failRequest(id: id, error: 'boom');
+      final log = HttpWatcherLogger.instance.logs.first;
+      expect(log.isPending, isFalse);
+      expect(log.isFailed, isTrue);
+      expect(log.responseBody, 'boom');
+    });
+
+    test('logResponse for unknown id is a no-op', () {
+      HttpWatcherLogger.instance.logResponse(id: 'nope', statusCode: 200);
+      expect(HttpWatcherLogger.instance.logs, isEmpty);
+    });
+
+    test('logRequestStart is no-op when disabled', () {
+      HttpWatcherLogger.instance.enabled = false;
+      final id = HttpWatcherLogger.instance.logRequestStart(
+        method: 'GET',
+        url: 'https://example.com',
+      );
+      expect(id, isNull);
+      expect(HttpWatcherLogger.instance.logs, isEmpty);
+      HttpWatcherLogger.instance.enabled = true;
+    });
+
+    test('pending entries are excluded from errorCount', () {
+      HttpWatcherLogger.instance.logRequestStart(
+        method: 'GET',
+        url: 'https://example.com',
+      );
+      expect(HttpWatcherLogger.instance.errorCount, 0);
+    });
   });
 
   group('NetworkLog', () {
@@ -133,6 +201,16 @@ void main() {
         statusCode: null, timestamp: _epoch, durationMs: 0,
       );
       expect(log.isFailed, isTrue);
+    });
+
+    test('pending log is neither success nor failed', () {
+      final log = NetworkLog(
+        id: '1', method: 'GET', url: 'https://x.com',
+        timestamp: _epoch, pending: true,
+      );
+      expect(log.isPending, isTrue);
+      expect(log.isFailed, isFalse);
+      expect(log.isSuccess, isFalse);
     });
   });
 }

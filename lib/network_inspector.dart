@@ -29,6 +29,20 @@
 /// );
 /// ```
 ///
+/// **2c. Or show the request immediately, then fill in the response:**
+/// ```dart
+/// final id = HttpWatcherLogger.instance.logRequestStart(
+///   method: 'GET',
+///   url: uri.toString(),
+/// );
+/// final response = await http.get(uri);
+/// HttpWatcherLogger.instance.logResponse(
+///   id: id!,
+///   statusCode: response.statusCode,
+///   responseBody: response.body,
+/// );
+/// ```
+///
 /// **3. Control visibility via a flag:**
 /// ```dart
 /// HttpWatcherOverlay(show: AppConstants.showNetworkInspector, child: child!)

@@ -24,6 +24,24 @@ class _InspectorDetailScreenState extends State<InspectorDetailScreen> {
 
   NetworkLog get log => widget.log;
 
+  @override
+  void initState() {
+    super.initState();
+    // The log object is mutated in place when a pending request completes —
+    // listen so the detail view updates live.
+    HttpWatcherLogger.instance.addListener(_refresh);
+  }
+
+  @override
+  void dispose() {
+    HttpWatcherLogger.instance.removeListener(_refresh);
+    super.dispose();
+  }
+
+  void _refresh() {
+    if (mounted) setState(() {});
+  }
+
   String _prettyJson(String? raw) {
     if (raw == null || raw.isEmpty) return '(empty)';
     try {
@@ -44,6 +62,7 @@ class _InspectorDetailScreenState extends State<InspectorDetailScreen> {
   }
 
   Color _statusColor() {
+    if (log.isPending) return const Color(0xFF61AFEF);
     if (log.isSuccess) return Colors.green;
     if (log.isClientError) return Colors.orange;
     if (log.isServerError) return Colors.red;
@@ -211,9 +230,13 @@ ${_prettyJson(log.responseBody)}
           _infoSection([
             _row('URL', log.url),
             _row('Method', log.method),
-            _row('Status', '${log.statusCode ?? "Error"}',
+            _row(
+                'Status',
+                log.isPending
+                    ? 'Pending…'
+                    : '${log.statusCode ?? "Error"}',
                 valueColor: _statusColor()),
-            _row('Duration', '${log.durationMs} ms'),
+            _row('Duration', log.isPending ? '—' : '${log.durationMs} ms'),
             _row('Time', log.timestamp.toLocal().toString()),
           ]),
           const SizedBox(height: 12),
@@ -221,7 +244,11 @@ ${_prettyJson(log.responseBody)}
           const SizedBox(height: 12),
           _codeSection('Request Body', _bodyStr(log.requestBody)),
           const SizedBox(height: 12),
-          _codeSection('Response Body', _prettyJson(log.responseBody)),
+          _codeSection(
+              'Response Body',
+              log.isPending
+                  ? '(waiting for response…)'
+                  : _prettyJson(log.responseBody)),
           const SizedBox(height: 12),
           _curlSection(),
           const SizedBox(height: 32),

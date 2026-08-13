@@ -1,3 +1,12 @@
+## 1.3.0
+
+* Add **two-phase logging** — requests can now appear in the inspector the moment they start, then update in place when the response arrives. New `HttpWatcherLogger.instance.logRequestStart(...)` returns an id; pass it to `logResponse(id: ..., statusCode: ..., responseBody: ...)` (or `failRequest(id: ...)`) on completion. The existing one-shot `logRequest(...)` still works unchanged.
+* Pending requests show a live spinner and `pending` label in the inspector list, detail screen, and web viewer; the detail screen updates automatically when the response lands.
+* Pending requests are excluded from the error badge count and status filters until they complete — `isSuccess`, `isClientError`, `isServerError`, and `isFailed` all return `false` while a request is in flight. Note that `isFailed` previously returned `true` for any log without a status code; a pending log is no longer reported as failed.
+* `NetworkLog` gains a `pending` field and an `isPending` getter. Its `statusCode`, `responseBody`, and `durationMs` fields are no longer `final` — a pending entry is updated in place rather than replaced, so a `NetworkLog` reference you hold can change after a response arrives. `durationMs` is now optional in the constructor and defaults to `0`.
+* Web Viewer `/api/logs` responses include a `pending` boolean for each log.
+* Example app now demonstrates the two-phase API — the dio interceptor logs on `onRequest` and completes on `onResponse`/`onError`, and new "slow" buttons on the dio and Manual tabs hold a request open so the pending state is visible.
+
 ## 1.2.5
 
 * Web Viewer now auto-selects a free port — if `9742` is already in use (e.g. a second app instance is running), it scans upward (`9743`, `9744`, … up to `9761`) for the first available port, so multiple apps can run their viewers at once. Each instance binds its own socket (`shared: false`) and the chosen port is shown in the URL.
