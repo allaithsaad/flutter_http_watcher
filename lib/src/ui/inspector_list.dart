@@ -45,7 +45,9 @@ class _InspectorListScreenState extends State<InspectorListScreen> {
     super.dispose();
   }
 
-  void _refresh() => setState(() {});
+  void _refresh() {
+    if (mounted) setState(() {});
+  }
 
   List<NetworkLog> get _filtered {
     var logs = HttpWatcherLogger.instance.logs.toList();

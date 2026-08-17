@@ -43,6 +43,8 @@ class HttpWatcherLogger extends ChangeNotifier {
   final _webServer = WatcherWebServer();
   int _counter = 0;
   Timer? _connectivityTimer;
+  bool _notifyScheduled = false;
+  bool _disposed = false;
 
   /// Current network connectivity status.
   NetworkStatus networkStatus = NetworkStatus.unknown;
@@ -66,6 +68,25 @@ class HttpWatcherLogger extends ChangeNotifier {
         final s = l.statusCode;
         return s == null || s == 0 || s >= 400;
       }).length;
+
+  /// Dispatches a change notification off the current call stack.
+  ///
+  /// Logging calls come from wherever the app makes its HTTP requests, which
+  /// includes `initState`, `build`, and controller `onInit` — all of which run
+  /// while the framework is building the widget tree. Notifying synchronously
+  /// from there would call `setState` on the overlay mid-build and trip
+  /// "setState() or markNeedsBuild() called during build".
+  ///
+  /// A build scope is always synchronous, so a microtask is guaranteed to run
+  /// after it has fully unwound. Bursts of logs collapse into one notification.
+  void _scheduleNotify() {
+    if (_notifyScheduled || _disposed) return;
+    _notifyScheduled = true;
+    scheduleMicrotask(() {
+      _notifyScheduled = false;
+      if (!_disposed) notifyListeners();
+    });
+  }
 
   void _startConnectivityPolling() {
     _checkConnectivity();
@@ -123,7 +144,7 @@ class HttpWatcherLogger extends ChangeNotifier {
       ),
     );
     if (_logs.length > maxEntries) _logs.removeLast();
-    notifyListeners();
+    _scheduleNotify();
   }
 
   /// Log the **start** of an HTTP request, before the response arrives.
@@ -168,7 +189,7 @@ class HttpWatcherLogger extends ChangeNotifier {
       ),
     );
     if (_logs.length > maxEntries) _logs.removeLast();
-    notifyListeners();
+    _scheduleNotify();
     return id;
   }
 
@@ -188,7 +209,7 @@ class HttpWatcherLogger extends ChangeNotifier {
     log.responseBody = responseBody;
     log.durationMs = DateTime.now().difference(log.timestamp).inMilliseconds;
     log.pending = false;
-    notifyListeners();
+    _scheduleNotify();
   }
 
   /// Mark a pending request as failed (no status code), e.g. on a network
@@ -249,6 +270,7 @@ class HttpWatcherLogger extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
     _connectivityTimer?.cancel();
     super.dispose();
   }

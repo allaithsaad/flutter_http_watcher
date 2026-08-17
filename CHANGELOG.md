@@ -1,3 +1,8 @@
+## 1.3.1
+
+* Fix **`setState() called during build`** crash introduced by two-phase logging in 1.3.0. `logRequestStart` notifies before the request is awaited, so calling it from `initState`, `build`, or a controller's `onInit` — anywhere a build scope is active — dispatched a notification mid-build and asserted inside `HttpWatcherOverlay`. Log notifications are now dispatched on a microtask, which is guaranteed to run after the (always synchronous) build scope unwinds. Log entries are still recorded synchronously, so `logs` is accurate the moment a call returns; only the listener notification defers, and bursts of logs now collapse into a single notification.
+* `_refresh` listeners in the overlay and list check `mounted` before `setState`.
+
 ## 1.3.0
 
 * Add **two-phase logging** — requests can now appear in the inspector the moment they start, then update in place when the response arrives. New `HttpWatcherLogger.instance.logRequestStart(...)` returns an id; pass it to `logResponse(id: ..., statusCode: ..., responseBody: ...)` (or `failRequest(id: ...)`) on completion. The existing one-shot `logRequest(...)` still works unchanged.
