@@ -6,6 +6,16 @@ import '../core/network_logger.dart';
 class WatcherTheme {
   WatcherTheme._();
 
+  /// Reports the host app's brightness to the logger so the inspector can
+  /// match it while [WatcherThemeMode.system] is active.
+  ///
+  /// Call this first thing in the `build` of every inspector screen: reading
+  /// the ambient [Theme] there also subscribes the screen to app theme changes.
+  static void syncWith(BuildContext context) =>
+      HttpWatcherLogger.instance.syncHostBrightness(
+        Theme.of(context).brightness,
+      );
+
   static bool get isDark => HttpWatcherLogger.instance.isDark;
 
   static Color get background  => isDark ? const Color(0xFF0D0D1A) : const Color(0xFFF0F2F5);

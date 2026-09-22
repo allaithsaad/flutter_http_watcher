@@ -180,6 +180,7 @@ ${_prettyJson(log.responseBody)}
 
   @override
   Widget build(BuildContext context) {
+    WatcherTheme.syncWith(context);
     return Scaffold(
       backgroundColor: WatcherTheme.background,
       appBar: AppBar(

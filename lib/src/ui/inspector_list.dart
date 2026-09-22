@@ -7,6 +7,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../core/network_logger.dart';
 import '../model/network_log.dart';
+import '../version.dart';
 import 'inspector_detail.dart';
 import 'inspector_stats.dart';
 import 'watcher_theme.dart';
@@ -132,7 +133,10 @@ class _InspectorListScreenState extends State<InspectorListScreen> {
     final har = {
       'log': {
         'version': '1.2',
-        'creator': {'name': 'flutter_http_watcher', 'version': '1.2.0'},
+        'creator': {
+          'name': 'flutter_http_watcher',
+          'version': kWatcherVersion,
+        },
         'entries': entries,
       },
     };
@@ -474,9 +478,17 @@ class _InspectorListScreenState extends State<InspectorListScreen> {
                         ? Icons.light_mode_outlined
                         : Icons.dark_mode_outlined,
                     label: WatcherTheme.isDark ? 'Light mode' : 'Dark mode',
-                    subtitle: 'Toggle inspector theme',
+                    subtitle:
+                        HttpWatcherLogger.instance.themeMode ==
+                            WatcherThemeMode.system
+                        ? 'Following the app theme'
+                        : 'Long press to follow the app theme again',
                     onTap: () {
                       HttpWatcherLogger.instance.toggleTheme();
+                      setSt(() {});
+                    },
+                    onLongPress: () {
+                      HttpWatcherLogger.instance.followAppTheme();
                       setSt(() {});
                     },
                   ),
@@ -524,6 +536,7 @@ class _InspectorListScreenState extends State<InspectorListScreen> {
     required String subtitle,
     required VoidCallback onTap,
     Color? iconColor,
+    VoidCallback? onLongPress,
   }) => ListTile(
     leading: Icon(icon, color: iconColor ?? WatcherTheme.iconColor),
     title: Text(label, style: TextStyle(color: WatcherTheme.textPrimary)),
@@ -532,6 +545,7 @@ class _InspectorListScreenState extends State<InspectorListScreen> {
       style: TextStyle(color: WatcherTheme.textHint, fontSize: 12),
     ),
     onTap: onTap,
+    onLongPress: onLongPress,
   );
 
   Color _methodColor(String method) {
@@ -559,6 +573,7 @@ class _InspectorListScreenState extends State<InspectorListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    WatcherTheme.syncWith(context);
     final logs = _filtered;
     return Scaffold(
       backgroundColor: WatcherTheme.background,

@@ -37,7 +37,7 @@ Works with **any** HTTP client — `http`, `dio`, `retrofit`, `graphql`, or your
 - **Stats screen** — success rate, avg duration, top hosts, slowest requests
 - **Export logs** — save as `.txt` or export as `.har` (Postman / Charles / DevTools compatible)
 - **Web Viewer** — open live logs in any browser on the same WiFi network
-- Dark / light theme toggle
+- Follows your app's light / dark theme — with a manual override
 - One-tap copy · share full request as text
 - Pause / resume logging
 - Works with **any** HTTP client — zero HTTP dependencies
@@ -236,7 +236,7 @@ Tap the floating button to open the inspector. All options are in the **⋮ menu
 | **Stats** | Success rate, average duration, by-method breakdown, top hosts, slowest requests |
 | **Save as .txt** | Export all logs as a plain text file and share it |
 | **Export as .har** | Export in HAR format — importable in Postman, Charles Proxy, or browser DevTools |
-| **Dark / Light mode** | Toggle the inspector theme |
+| **Dark / Light mode** | Pin the inspector theme; long-press to follow the app again |
 | **Pause / Resume** | Stop or start capturing new requests |
 | **Clear all** | Delete all logged requests |
 
@@ -340,6 +340,26 @@ HttpWatcherLogger.instance.maxEntries = 100;
 // Read the current error count (4xx / 5xx / failed requests):
 final errors = HttpWatcherLogger.instance.errorCount;
 ```
+
+### Theme
+
+By default the inspector follows your app's brightness, so it matches whatever
+`ThemeData` is in effect — including a device that boots in dark mode.
+
+```dart
+// Default — match the host app:
+HttpWatcherLogger.instance.themeMode = WatcherThemeMode.system;
+
+// Pin the inspector to one palette regardless of the app:
+HttpWatcherLogger.instance.themeMode = WatcherThemeMode.dark;
+HttpWatcherLogger.instance.isDark = true; // equivalent shorthand
+
+// Hand control back to the app:
+HttpWatcherLogger.instance.followAppTheme();
+```
+
+In the inspector, tapping the theme row pins the opposite palette and
+long-pressing it returns to following the app.
 
 ### Custom icon
 

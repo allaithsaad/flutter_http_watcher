@@ -16,6 +16,18 @@ enum NetworkStatus {
   unknown,
 }
 
+/// How the inspector UI chooses between its dark and light palettes.
+enum WatcherThemeMode {
+  /// Follow the host app's brightness. This is the default.
+  system,
+
+  /// Always use the light palette.
+  light,
+
+  /// Always use the dark palette.
+  dark,
+}
+
 /// Central store for all captured HTTP logs.
 ///
 /// Access the singleton via [HttpWatcherLogger.instance].
@@ -52,8 +64,40 @@ class HttpWatcherLogger extends ChangeNotifier {
   /// Set to `false` to pause logging without removing the overlay.
   bool enabled = true;
 
-  /// Whether the inspector UI uses dark mode. Defaults to `true`.
-  bool isDark = true;
+  /// How the inspector picks its palette.
+  ///
+  /// Defaults to [WatcherThemeMode.system], which follows the brightness of
+  /// the host app's [ThemeData] — so the inspector matches the app instead of
+  /// always opening dark.
+  WatcherThemeMode themeMode = WatcherThemeMode.system;
+
+  /// Brightness of the host app, refreshed by the inspector screens on build.
+  /// Only consulted while [themeMode] is [WatcherThemeMode.system].
+  Brightness _hostBrightness = Brightness.light;
+
+  /// Records the host app's brightness. Called by the inspector UI during
+  /// build, so it must not notify synchronously.
+  void syncHostBrightness(Brightness brightness) {
+    if (_hostBrightness == brightness) return;
+    _hostBrightness = brightness;
+    if (themeMode == WatcherThemeMode.system) _scheduleNotify();
+  }
+
+  /// Whether the inspector UI is currently dark.
+  ///
+  /// Resolved from [themeMode]; under [WatcherThemeMode.system] it mirrors the
+  /// host app. Assigning to it pins the inspector to that palette, leaving
+  /// [WatcherThemeMode.system] behind.
+  bool get isDark => switch (themeMode) {
+        WatcherThemeMode.dark => true,
+        WatcherThemeMode.light => false,
+        WatcherThemeMode.system => _hostBrightness == Brightness.dark,
+      };
+
+  set isDark(bool value) {
+    themeMode = value ? WatcherThemeMode.dark : WatcherThemeMode.light;
+    notifyListeners();
+  }
 
   /// Maximum number of log entries kept in memory. Defaults to 300.
   int maxEntries = 300;
@@ -232,8 +276,14 @@ class HttpWatcherLogger extends ChangeNotifier {
   }
 
   /// Toggle between dark and light inspector theme.
-  void toggleTheme() {
-    isDark = !isDark;
+  ///
+  /// Pins [themeMode] to the chosen palette; call [followAppTheme] to hand
+  /// control back to the host app.
+  void toggleTheme() => isDark = !isDark;
+
+  /// Return to following the host app's brightness.
+  void followAppTheme() {
+    themeMode = WatcherThemeMode.system;
     notifyListeners();
   }
 

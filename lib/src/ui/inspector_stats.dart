@@ -10,6 +10,7 @@ class InspectorStatsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    WatcherTheme.syncWith(context);
     final logs = HttpWatcherLogger.instance.logs;
 
     if (logs.isEmpty) {

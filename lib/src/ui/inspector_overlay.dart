@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../core/network_logger.dart';
 import 'inspector_list.dart';
+import 'watcher_theme.dart';
 
 Color _statusColor(NetworkStatus s) {
   switch (s) {
@@ -74,6 +75,11 @@ class _HttpWatcherOverlayState extends State<HttpWatcherOverlay> {
 
   @override
   Widget build(BuildContext context) {
+    // The overlay wraps the whole app, so this is where the inspector picks up
+    // the app's brightness — and where it re-reads it when the app's theme
+    // changes, even while no inspector screen is open.
+    WatcherTheme.syncWith(context);
+
     if (!widget.show) {
       return widget.child;
     }

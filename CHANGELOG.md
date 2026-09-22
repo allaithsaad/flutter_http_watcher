@@ -1,3 +1,10 @@
+## 1.3.2
+
+* Fix the inspector **always opening in dark mode**, regardless of the host app. `HttpWatcherLogger.instance.isDark` was hardcoded to `true` and the inspector never read the ambient `Theme`, so on a light app the options sheet, list, and detail screens all rendered with the dark palette. The inspector now follows the host app's brightness by default.
+* New `HttpWatcherLogger.instance.themeMode` (`WatcherThemeMode.system` | `.light` | `.dark`), defaulting to `system`. Assigning `isDark` still works and now pins the inspector to that palette; `toggleTheme()` does the same. Call `followAppTheme()` — or long-press the theme row in the options sheet — to hand control back to the app.
+* The theme row in the options sheet shows which mode is active.
+* Fix HAR exports reporting a stale **`log.creator.version`** — it was hardcoded to `1.2.0` and never moved, so every `.har` produced since 1.2.0 misreported the version that generated it. The version now lives in one place (`kWatcherVersion`) and a test fails the build if it drifts from `pubspec.yaml`. The HAR spec version (`log.version: "1.2"`) is unchanged and was always correct.
+
 ## 1.3.1
 
 * Fix **`setState() called during build`** crash introduced by two-phase logging in 1.3.0. `logRequestStart` notifies before the request is awaited, so calling it from `initState`, `build`, or a controller's `onInit` — anywhere a build scope is active — dispatched a notification mid-build and asserted inside `HttpWatcherOverlay`. Log notifications are now dispatched on a microtask, which is guaranteed to run after the (always synchronous) build scope unwinds. Log entries are still recorded synchronously, so `logs` is accurate the moment a call returns; only the listener notification defers, and bursts of logs now collapse into a single notification.

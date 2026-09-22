@@ -20,6 +20,15 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
       ),
+      // Follow the device's light/dark setting. The inspector picks this up
+      // automatically — see WatcherThemeMode.system.
+      darkTheme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.deepPurple,
+          brightness: Brightness.dark,
+        ),
+        useMaterial3: true,
+      ),
       builder: (context, child) => HttpWatcherOverlay(
         navigatorKey: navigatorKey,
         child: child!,
