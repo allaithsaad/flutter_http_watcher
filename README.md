@@ -36,7 +36,7 @@ Works with **any** HTTP client — `http`, `dio`, `retrofit`, `graphql`, or your
 - **Request replay** — re-send any logged request with one tap
 - **Stats screen** — success rate, avg duration, top hosts, slowest requests
 - **Export logs** — save as `.txt` or export as `.har` (Postman / Charles / DevTools compatible)
-- **Web Viewer** — open live logs in any browser on the same WiFi network
+- **Web Viewer** — open live logs in any browser on the same WiFi network, optionally auto-started in debug builds
 - Follows your app's light / dark theme — with a manual override
 - One-tap copy · share full request as text
 - Pause / resume logging
@@ -49,7 +49,7 @@ Works with **any** HTTP client — `http`, `dio`, `retrofit`, `graphql`, or your
 
 ```yaml
 dependencies:
-  flutter_http_watcher: ^1.3.1
+  flutter_http_watcher: ^1.4.0
 ```
 
 ---
@@ -270,6 +270,7 @@ The floating button is **draggable** — press and drag it to any edge of the sc
 | Number | Total logged request count |
 | Red badge | Number of 4xx / 5xx / failed requests since last clear |
 | ▶ icon | Logging is paused — tap to resume |
+| Green 📡 icon | The Web Viewer server is running |
 
 ---
 
@@ -320,6 +321,26 @@ await HttpWatcherLogger.instance.startWebServer();
 print(HttpWatcherLogger.instance.webServerUrl); // http://192.168.x.x:9742
 await HttpWatcherLogger.instance.stopWebServer();
 ```
+
+### Start automatically in debug
+
+Set `autoStartWebServer: true` and the server starts as soon as the app
+launches, so you can open the logs in a browser without touching the phone:
+
+```dart
+HttpWatcherOverlay(
+  navigatorKey: navigatorKey,
+  autoStartWebServer: true, // debug builds only
+  child: child!,
+)
+```
+
+The URL is printed to the debug console
+(`[HttpWatcher] Web Viewer running at http://192.168.x.x:9742`) and a green
+icon appears on the floating button while the server runs. The option is
+ignored in profile and release builds, on Flutter web, and while `show` is
+`false`. If you stop the server from the inspector, it stays stopped until the
+next launch.
 
 > **Note:** The web viewer runs on port `9742` by default. If that port is already in use (e.g. a second app instance is running), it automatically scans upward (`9743`, `9744`, …) for the first free port — so you can run several apps at once, each with its own viewer. The chosen port is shown in the URL. Make sure your device firewall allows connections on that port range.
 

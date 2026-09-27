@@ -1,3 +1,10 @@
+## 1.4.0
+
+* Add **`HttpWatcherOverlay(autoStartWebServer: true)`** — starts the Web Viewer as soon as the app launches, so logs can be opened in a browser without first going through **⋮ → Web Viewer**. It only takes effect in debug builds (`kDebugMode`) and while `show` is `true`; it is ignored in profile/release builds and on Flutter web. The URL is printed to the debug console. Defaults to `false`.
+* A server you stop by hand is not restarted when the overlay rebuilds; it starts again on the next launch (or hot restart). Switching the option on during a hot reload starts it immediately.
+* The floating button now shows a green **Web Viewer icon** while the server is running, whether it was started automatically or from the options sheet. It stays visible while logging is paused, since the server keeps serving.
+* Fix the floating button sliding **under the system navigation bar** in landscape. It was positioned from the raw screen edge, so on Android in landscape the nav bar covered its right end — the request count, error badge, and server icon. The button now stays inside the safe area, including while dragging.
+
 ## 1.3.2
 
 * Fix the inspector **always opening in dark mode**, regardless of the host app. `HttpWatcherLogger.instance.isDark` was hardcoded to `true` and the inspector never read the ambient `Theme`, so on a light app the options sheet, list, and detail screens all rendered with the dark palette. The inspector now follows the host app's brightness by default.

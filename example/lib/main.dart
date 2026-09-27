@@ -31,6 +31,10 @@ class MyApp extends StatelessWidget {
       ),
       builder: (context, child) => HttpWatcherOverlay(
         navigatorKey: navigatorKey,
+        // Start the Web Viewer on launch (debug builds only). The URL is
+        // printed to the console, and a green icon on the floating button
+        // shows while it runs.
+        autoStartWebServer: true,
         child: child!,
       ),
       home: const HomePage(),

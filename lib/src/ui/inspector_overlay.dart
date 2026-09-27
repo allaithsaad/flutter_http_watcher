@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../core/network_logger.dart';
 import 'inspector_list.dart';
@@ -27,6 +28,8 @@ Color _statusColor(NetworkStatus s) {
 ///
 /// Set [show] to `false` to hide the button (e.g. via a feature flag).
 /// Set [icon] to replace the default network icon with any [IconData].
+/// Set [autoStartWebServer] to `true` to start the Web Viewer on launch in
+/// debug builds.
 class HttpWatcherOverlay extends StatefulWidget {
   final Widget child;
 
@@ -40,12 +43,21 @@ class HttpWatcherOverlay extends StatefulWidget {
   /// Custom icon for the floating button. Defaults to [Icons.network_check_rounded].
   final IconData? icon;
 
+  /// Start the Web Viewer server as soon as the overlay is mounted, so the
+  /// logs are reachable from a browser without opening the inspector first.
+  ///
+  /// Only takes effect in debug builds ([kDebugMode]) and while [show] is
+  /// `true`; it is ignored in profile and release builds and on Flutter web.
+  /// The URL is printed to the debug console. Defaults to `false`.
+  final bool autoStartWebServer;
+
   const HttpWatcherOverlay({
     super.key,
     required this.child,
     required this.navigatorKey,
     this.show = true,
     this.icon,
+    this.autoStartWebServer = false,
   });
 
   @override
@@ -61,6 +73,33 @@ class _HttpWatcherOverlayState extends State<HttpWatcherOverlay> {
   void initState() {
     super.initState();
     HttpWatcherLogger.instance.addListener(_refresh);
+    _maybeAutoStartWebServer();
+  }
+
+  @override
+  void didUpdateWidget(HttpWatcherOverlay oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Only react to the option being switched on (e.g. by a hot reload), so a
+    // server the developer stopped by hand is not restarted on every rebuild.
+    final wasOn = oldWidget.autoStartWebServer && oldWidget.show;
+    if (!wasOn) _maybeAutoStartWebServer();
+  }
+
+  Future<void> _maybeAutoStartWebServer() async {
+    if (!kDebugMode || kIsWeb) return;
+    if (!widget.autoStartWebServer || !widget.show) return;
+    final logger = HttpWatcherLogger.instance;
+    if (logger.webServerRunning) return;
+    final url = await logger.startWebServer();
+    if (url == null) {
+      debugPrint('[HttpWatcher] Web Viewer failed to start: '
+          '${logger.webServerLastError ?? 'unknown error'}');
+    } else if (logger.webServerIsLoopback) {
+      debugPrint('[HttpWatcher] Web Viewer running at $url '
+          '(loopback only — not reachable from other devices)');
+    } else {
+      debugPrint('[HttpWatcher] Web Viewer running at $url');
+    }
   }
 
   @override
@@ -84,23 +123,31 @@ class _HttpWatcherOverlayState extends State<HttpWatcherOverlay> {
       return widget.child;
     }
 
+    // Keep the button clear of system UI — in landscape the navigation bar
+    // sits on the right edge and would otherwise cover the end of the button,
+    // where the count, server icon, and error badge are.
+    final safe = MediaQuery.of(context).padding;
+
     return Stack(
       children: [
         widget.child,
         Positioned(
           top: _top,
-          right: _right,
+          right: _right + safe.right,
           child: GestureDetector(
             onPanUpdate: (d) => setState(() {
               final size = MediaQuery.of(context).size;
-              _top = (_top + d.delta.dy).clamp(0.0, size.height - 48);
-              _right = (_right - d.delta.dx).clamp(0.0, size.width - 72);
+              _top = (_top + d.delta.dy)
+                  .clamp(safe.top, size.height - safe.bottom - 48);
+              _right = (_right - d.delta.dx)
+                  .clamp(0.0, size.width - safe.horizontal - 72);
             }),
             child: _InspectorButton(
               count: HttpWatcherLogger.instance.logs.length,
               errorCount: HttpWatcherLogger.instance.errorCount,
               status: HttpWatcherLogger.instance.networkStatus,
               paused: !HttpWatcherLogger.instance.enabled,
+              serverRunning: HttpWatcherLogger.instance.webServerRunning,
               icon: widget.icon,
               onTap: () {
                 if (!HttpWatcherLogger.instance.enabled) {
@@ -124,6 +171,7 @@ class _InspectorButton extends StatelessWidget {
   final int errorCount;
   final NetworkStatus status;
   final bool paused;
+  final bool serverRunning;
   final IconData? icon;
   final VoidCallback onTap;
 
@@ -132,6 +180,7 @@ class _InspectorButton extends StatelessWidget {
     required this.errorCount,
     required this.status,
     required this.paused,
+    required this.serverRunning,
     required this.onTap,
     this.icon,
   });
@@ -177,6 +226,14 @@ class _InspectorButton extends StatelessWidget {
                         fontWeight: FontWeight.bold),
                   ),
                 ],
+              ],
+              // Shown while paused too — the server keeps serving either way.
+              if (serverRunning) ...[
+                const SizedBox(width: 5),
+                const Icon(Icons.wifi_tethering,
+                    color: Colors.greenAccent,
+                    size: 14,
+                    semanticLabel: 'Web Viewer running'),
               ],
             ],
           ),
