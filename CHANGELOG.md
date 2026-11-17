@@ -1,3 +1,8 @@
+## 1.4.1
+
+* Fix the **Web Viewer dying on a dropped connection**. A connection aborted before the server accepted it (a Wi-Fi drop, or a client giving up) reached the zone as an unhandled `SocketException: Software caused connection abort`, and the port stopped answering while the overlay still showed the server as running. The server now catches errors on its socket and rebinds itself, on the same port when it is free, so an open viewer reconnects on its own. It looks up the device's address again before rebinding, since a Wi-Fi drop can change it; if the address changed, the viewer has to be reopened at the new URL. If the socket dies again within 2 seconds of a restart it gives up instead of looping; the server then shows as stopped, with the reason in `webServerLastError`.
+* A client that hangs up mid-response no longer throws an unhandled exception.
+
 ## 1.4.0
 
 * Add **`HttpWatcherOverlay(autoStartWebServer: true)`** — starts the Web Viewer as soon as the app launches, so logs can be opened in a browser without first going through **⋮ → Web Viewer**. It only takes effect in debug builds (`kDebugMode`) and while `show` is `true`; it is ignored in profile/release builds and on Flutter web. The URL is printed to the debug console. Defaults to `false`.

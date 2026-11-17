@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import '../model/network_log.dart';
 
 class WatcherWebServer {
@@ -10,10 +11,27 @@ class WatcherWebServer {
   /// How many consecutive ports to try before giving up.
   static const int portRange = 20;
 
+  /// A second failure within this window gives up instead of rebinding again,
+  /// so a socket that fails on every bind can't spin in a restart loop.
+  static const Duration restartWindow = Duration(seconds: 2);
+
   HttpServer? _server;
   String? _url;
   String? _lastError;
   int? _port;
+  String? _ip;
+  List<NetworkLog> Function()? _getLogs;
+  VoidCallback? _onChanged;
+  DateTime? _lastRestart;
+
+  /// Bumped by [start] and [stop], so a restart in flight can tell that the
+  /// server was stopped (or started afresh) while it was awaiting.
+  int _generation = 0;
+
+  /// Awaited by a restart just before it rebinds, so tests can call [stop]
+  /// at exactly that point.
+  @visibleForTesting
+  Future<void> Function()? debugBeforeRebind;
 
   String? get url => _url;
   int? get port => _port;
@@ -21,21 +39,31 @@ class WatcherWebServer {
   String? get lastError => _lastError;
   bool get isLoopback => _url != null && _url!.contains('://127.0.0.1');
 
-  Future<String?> start(List<NetworkLog> Function() getLogs) async {
+  /// The live server, so tests can kill it the way a dropped socket does.
+  @visibleForTesting
+  HttpServer? get debugServer => _server;
+
+  /// Starts the server. [onChanged] fires when the server restarts itself
+  /// after its socket dies, or gives up, so the UI can show the new state.
+  Future<String?> start(
+    List<NetworkLog> Function() getLogs, {
+    VoidCallback? onChanged,
+  }) async {
     if (_server != null) return _url;
+    _generation++;
+    _getLogs = getLogs;
+    _onChanged = onChanged;
     _lastError = null;
+    _lastRestart = null;
     try {
-      final ip = await _localIp();
-      final server = await _bindFreePort(ip);
+      _ip = await _localIp();
+      final server = await _bindFreePort(_ip!);
       if (server == null) {
         _lastError =
             'No free port available in range $basePort-${basePort + portRange - 1}';
         return null;
       }
-      _server = server;
-      _port = server.port;
-      _url = 'http://$ip:$_port';
-      _serve(getLogs);
+      _attach(server);
       return _url;
     } catch (e) {
       _lastError = e.toString();
@@ -43,12 +71,18 @@ class WatcherWebServer {
     }
   }
 
-  /// Tries [basePort], then each subsequent port, returning the first one that
-  /// binds successfully. `shared: false` ensures each app instance gets its own
+  /// Tries [preferred] first (the port a restarted server had), then
+  /// [basePort] and each subsequent port, returning the first one that binds
+  /// successfully. `shared: false` ensures each app instance gets its own
   /// socket instead of silently sharing the same port. Returns null if every
   /// port in the range is taken.
-  Future<HttpServer?> _bindFreePort(String ip) async {
-    for (var p = basePort; p < basePort + portRange; p++) {
+  Future<HttpServer?> _bindFreePort(String ip, {int? preferred}) async {
+    final ports = [
+      if (preferred != null) preferred,
+      for (var p = basePort; p < basePort + portRange; p++)
+        if (p != preferred) p,
+    ];
+    for (final p in ports) {
       try {
         return await HttpServer.bind(ip, p, shared: false);
       } on SocketException {
@@ -60,16 +94,78 @@ class WatcherWebServer {
   }
 
   Future<void> stop() async {
-    await _server?.close(force: true);
+    // Detach first: closing ends the stream, and its onDone must see a server
+    // that is no longer ours, or it would restart what we are stopping.
+    _generation++;
+    final server = _server;
     _server = null;
     _url = null;
     _port = null;
+    await server?.close(force: true);
   }
 
-  void _serve(List<NetworkLog> Function() getLogs) {
-    _server?.listen((req) async {
+  void _attach(HttpServer server) {
+    _server = server;
+    _port = server.port;
+    _url = 'http://$_ip:$_port';
+    server.listen(
+      _handle,
+      // A connection aborted before accept (e.g. a Wi-Fi drop) surfaces here.
+      // Unhandled, it reached the zone as an uncaught SocketException and left
+      // the port dead while the overlay still said "running".
+      onError: (Object e) => _recover(server, e),
+      onDone: () => _recover(server, null),
+    );
+  }
+
+  /// Replaces a server whose stream failed or ended without [stop], keeping
+  /// the same port when it is free so an open viewer reconnects by itself.
+  Future<void> _recover(HttpServer dead, Object? error) async {
+    if (!identical(dead, _server)) return; // stopped, or already replaced
+    final generation = _generation;
+    // stop() or start() ran while we were awaiting: this recovery is stale.
+    bool superseded() => generation != _generation;
+    final port = _port;
+    _server = null;
+    if (error != null) _lastError = error.toString();
+    try {
+      await dead.close(force: true);
+    } catch (_) {
+      // Already closed.
+    }
+
+    final now = DateTime.now();
+    final last = _lastRestart;
+    final tooSoon = last != null && now.difference(last) < restartWindow;
+    HttpServer? server;
+    if (!tooSoon) {
+      await debugBeforeRebind?.call();
+      if (superseded()) return;
+      // A Wi-Fi drop often hands the device a new address; binding to the old
+      // one would fail on every port.
+      _ip = await _localIp();
+      if (superseded()) return;
+      server = await _bindFreePort(_ip!, preferred: port);
+    }
+    if (superseded()) {
+      await server?.close(force: true);
+      return;
+    }
+    if (server == null) {
+      _url = null;
+      _port = null;
+      _lastError = 'Web viewer stopped: ${_lastError ?? 'socket closed'}';
+    } else {
+      _lastRestart = now;
+      _attach(server);
+    }
+    _onChanged?.call();
+  }
+
+  Future<void> _handle(HttpRequest req) async {
+    try {
       if (req.uri.path == '/api/logs') {
-        final data = getLogs()
+        final data = (_getLogs?.call() ?? const <NetworkLog>[])
             .map((l) => {
                   'method': l.method,
                   'url': l.url,
@@ -86,14 +182,15 @@ class WatcherWebServer {
           ..headers.contentType = ContentType.json
           ..headers.add('Access-Control-Allow-Origin', '*')
           ..write(jsonEncode(data));
-        await req.response.close();
       } else {
         req.response
           ..headers.contentType = ContentType.html
           ..write(_html);
-        await req.response.close();
       }
-    });
+      await req.response.close();
+    } on IOException {
+      // The client hung up mid-response. Nothing to answer; the server lives on.
+    }
   }
 
   Future<String> _localIp() async {

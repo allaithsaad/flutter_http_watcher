@@ -307,7 +307,7 @@ class HttpWatcherLogger extends ChangeNotifier {
 
   /// Starts the web viewer server and returns its URL, or `null` on failure.
   Future<String?> startWebServer() async {
-    final url = await _webServer.start(() => _logs);
+    final url = await _webServer.start(() => _logs, onChanged: _scheduleNotify);
     notifyListeners();
     return url;
   }
