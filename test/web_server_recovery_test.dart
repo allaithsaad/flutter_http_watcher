@@ -6,7 +6,8 @@ import 'package:flutter_http_watcher/src/core/watcher_web_server.dart';
 Future<int> _getStatus(String url) async {
   final client = HttpClient();
   try {
-    final req = await client.getUrl(Uri.parse('$url/api/logs'));
+    // The pairing page: answers 200 without a session.
+    final req = await client.getUrl(Uri.parse(url).resolve('/'));
     final res = await req.close();
     await res.drain<void>();
     return res.statusCode;
@@ -27,7 +28,7 @@ void main() {
   var changes = 0;
 
   setUp(() async {
-    server = WatcherWebServer();
+    server = WatcherWebServer(firstPort: 9800);
     changes = 0;
     await server.start(() => const [], onChanged: () => changes++);
     expect(server.isRunning, isTrue, reason: server.lastError);

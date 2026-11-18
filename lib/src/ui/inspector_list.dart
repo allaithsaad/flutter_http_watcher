@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
@@ -11,6 +12,23 @@ import '../version.dart';
 import 'inspector_detail.dart';
 import 'inspector_stats.dart';
 import 'watcher_theme.dart';
+
+const _harExportName = 'http_watcher.har';
+const _textExportName = 'http_watcher_logs.txt';
+
+/// Deletes log exports left in the app's temp folder by an earlier run. They
+/// hold auth headers and bodies, so they shouldn't outlive the session that
+/// shared them. Errors (no temp folder, no plugin in tests) are ignored.
+Future<void> deleteWatcherExports() async {
+  if (kIsWeb) return;
+  try {
+    final dir = await getTemporaryDirectory();
+    for (final name in [_harExportName, _textExportName]) {
+      final file = File('${dir.path}/$name');
+      if (await file.exists()) await file.delete();
+    }
+  } catch (_) {}
+}
 
 class InspectorListScreen extends StatefulWidget {
   const InspectorListScreen({super.key});
@@ -143,7 +161,7 @@ class _InspectorListScreenState extends State<InspectorListScreen> {
 
     final json = const JsonEncoder.withIndent('  ').convert(har);
     final dir = await getTemporaryDirectory();
-    final file = File('${dir.path}/http_watcher.har');
+    final file = File('${dir.path}/$_harExportName');
     await file.writeAsString(json);
     await SharePlus.instance.share(
       ShareParams(
@@ -176,7 +194,7 @@ class _InspectorListScreenState extends State<InspectorListScreen> {
       buffer.writeln('=' * 60);
     }
     final dir = await getTemporaryDirectory();
-    final file = File('${dir.path}/http_watcher_logs.txt');
+    final file = File('${dir.path}/$_textExportName');
     await file.writeAsString(buffer.toString());
     await SharePlus.instance.share(
       ShareParams(files: [XFile(file.path)], subject: 'HTTP Watcher Logs'),
@@ -215,9 +233,213 @@ class _InspectorListScreenState extends State<InspectorListScreen> {
     });
   }
 
+  Widget _webViewerCodeSection(BuildContext context) {
+    final logger = HttpWatcherLogger.instance;
+    final requires = logger.webServerRequiresCode;
+    final code = logger.webServerPairingCode ?? '';
+    final shown = !logger.webServerHasCustomCode && code.length == 6
+        ? '${code.substring(0, 3)} ${code.substring(3)}'
+        : code;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'This device only (USB)',
+                style: TextStyle(color: WatcherTheme.textPrimary, fontSize: 14),
+              ),
+            ),
+            Switch(
+              value: logger.webServerLocalOnly,
+              activeThumbColor: Colors.greenAccent,
+              onChanged: (on) async {
+                // Restarts the server on a new address: reopen the dialog so
+                // the URL shown is the new one.
+                await logger.setWebServerLocalOnly(on);
+                if (!context.mounted) return;
+                Navigator.pop(context);
+                _showWebViewerDialog(context);
+              },
+            ),
+          ],
+        ),
+        // Turning the code off is only offered in debug builds.
+        if (logger.webServerCanTurnOffCode || !requires)
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Require code',
+                  style:
+                      TextStyle(color: WatcherTheme.textPrimary, fontSize: 14),
+                ),
+              ),
+              Switch(
+                value: requires,
+                activeThumbColor: Colors.greenAccent,
+                onChanged: (on) async {
+                  if (!on && !await _confirmTurnOffCode(context)) return;
+                  logger.setWebServerRequiresCode(on);
+                },
+              ),
+            ],
+          ),
+        if (requires) ...[
+          Text(
+            logger.webServerHasCustomCode
+                ? 'The browser asks for your code once:'
+                : 'The browser asks for this code once:',
+            style: TextStyle(color: WatcherTheme.textHint, fontSize: 13),
+          ),
+          const SizedBox(height: 8),
+          Center(
+            child: SelectableText(
+              shown,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: WatcherTheme.textPrimary,
+                fontSize: shown.length > 10 ? 20 : 32,
+                fontWeight: FontWeight.w600,
+                letterSpacing: shown.length > 10 ? 1 : 4,
+                fontFamily: 'monospace',
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Wrap(
+            alignment: WrapAlignment.center,
+            children: [
+              TextButton.icon(
+                icon: const Icon(Icons.edit_outlined, size: 16),
+                label: const Text('Change code'),
+                onPressed: () => _showChangeCodeDialog(context),
+              ),
+              if (logger.webServerHasCustomCode)
+                TextButton.icon(
+                  icon: const Icon(Icons.casino_outlined, size: 16),
+                  label: const Text('Use random code'),
+                  onPressed: () => logger.setWebServerCode(null),
+                ),
+            ],
+          ),
+        ] else
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.redAccent.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.redAccent.withValues(alpha: 0.4)),
+            ),
+            child: Text(
+              'No code: anyone on this network can open the URL and read '
+              'every logged header and body, including auth tokens.',
+              style: TextStyle(color: Colors.red.shade200, fontSize: 12),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Future<bool> _confirmTurnOffCode(BuildContext context) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: WatcherTheme.surface,
+        title: Text(
+          'Turn off the code?',
+          style: TextStyle(color: WatcherTheme.textPrimary, fontSize: 16),
+        ),
+        content: Text(
+          'Anyone on the same Wi-Fi will be able to open the Web Viewer and '
+          'read every logged header and body, including auth tokens. This '
+          'lasts until you turn it back on or the app restarts.',
+          style: TextStyle(color: WatcherTheme.textHint, fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text(
+              'Turn off',
+              style: TextStyle(color: Colors.redAccent),
+            ),
+          ),
+        ],
+      ),
+    );
+    return ok ?? false;
+  }
+
+  Future<void> _showChangeCodeDialog(BuildContext context) async {
+    final controller = TextEditingController();
+    String? error;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSt) {
+          void save() {
+            final code = controller.text;
+            final problem = HttpWatcherLogger.validateWebServerCode(code);
+            if (problem != null) {
+              setSt(() => error = problem);
+              return;
+            }
+            HttpWatcherLogger.instance.setWebServerCode(code);
+            Navigator.pop(ctx);
+          }
+
+          return AlertDialog(
+            backgroundColor: WatcherTheme.surface,
+            title: Text(
+              'Change code',
+              style: TextStyle(color: WatcherTheme.textPrimary, fontSize: 16),
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  controller: controller,
+                  autofocus: true,
+                  style: TextStyle(color: WatcherTheme.textPrimary),
+                  decoration: InputDecoration(
+                    hintText: 'New code',
+                    errorText: error,
+                  ),
+                  onSubmitted: (_) => save(),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '6–64 characters, no spaces. Kept until the app restarts. '
+                  'Browsers already paired must enter the new code.',
+                  style: TextStyle(color: WatcherTheme.textHint, fontSize: 12),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              TextButton(onPressed: save, child: const Text('Save')),
+            ],
+          );
+        },
+      ),
+    );
+    controller.dispose();
+  }
+
   void _showWebViewerDialog(BuildContext context) {
     final url = HttpWatcherLogger.instance.webServerUrl ?? '';
     final isLoopback = url.contains('127.0.0.1');
+    final port = Uri.tryParse(url)?.port ?? 9742;
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
@@ -264,7 +486,11 @@ class _InspectorListScreenState extends State<InspectorListScreen> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Device not on WiFi — URL only works on this device.',
+                        HttpWatcherLogger.instance.webServerLocalOnly
+                            ? 'This device only. On a computer connected by '
+                                'USB, run "adb forward tcp:$port tcp:$port" '
+                                'and open http://localhost:$port'
+                            : 'Device not on WiFi — URL only works on this device.',
                         style: TextStyle(
                           color: Colors.orange.shade300,
                           fontSize: 12,
@@ -331,6 +557,13 @@ class _InspectorListScreenState extends State<InspectorListScreen> {
             Text(
               'Tap the URL to copy it',
               style: TextStyle(color: WatcherTheme.textHint, fontSize: 11),
+            ),
+            const SizedBox(height: 12),
+            // Rebuilds when the code changes: after too many wrong tries, or
+            // from the controls below.
+            ListenableBuilder(
+              listenable: HttpWatcherLogger.instance,
+              builder: (_, __) => _webViewerCodeSection(context),
             ),
           ],
         ),
@@ -419,7 +652,8 @@ class _InspectorListScreenState extends State<InspectorListScreen> {
                         ? 'Web Viewer — Running'
                         : 'Web Viewer',
                     subtitle: HttpWatcherLogger.instance.webServerRunning
-                        ? (HttpWatcherLogger.instance.webServerUrl ?? '')
+                        ? '${HttpWatcherLogger.instance.webServerUrl ?? ''}'
+                            '  ·  ${HttpWatcherLogger.instance.webServerRequiresCode ? 'code ${HttpWatcherLogger.instance.webServerPairingCode ?? ''}' : 'no code'}'
                         : 'Open logs in any browser on the same WiFi',
                     iconColor: HttpWatcherLogger.instance.webServerRunning
                         ? Colors.greenAccent

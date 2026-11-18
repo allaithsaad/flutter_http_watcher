@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 import 'package:flutter/foundation.dart';
 import '../model/network_log.dart';
 
@@ -15,11 +16,52 @@ class WatcherWebServer {
   /// so a socket that fails on every bind can't spin in a restart loop.
   static const Duration restartWindow = Duration(seconds: 2);
 
+  /// [firstPort] is [basePort] in the app. Test files that run in parallel
+  /// pass their own, so they don't take each other's ports.
+  WatcherWebServer({@visibleForTesting this.firstPort = basePort});
+
+  final int firstPort;
+
   HttpServer? _server;
   String? _url;
   String? _lastError;
   int? _port;
   String? _ip;
+
+  // Pairing. Logs carry auth tokens and session bodies, and the server listens
+  // on the Wi-Fi address, so a browser sees them only after it enters the code
+  // shown on the phone. It then gets a session cookie; each browser pairs once.
+
+  // Guessing limits are per client (remote address), so one device sending
+  // wrong codes locks out only itself, not the developer.
+
+  /// Wrong codes in a row from one client before that client is locked out
+  /// for [lockoutDelay].
+  static const int maxWrongCodes = 5;
+
+  /// Wrong codes from all clients together before a random code is replaced,
+  /// which caps guessing from many addresses. A custom code is never replaced.
+  static const int maxWrongCodesPerCode = 50;
+
+  /// Shortest and longest custom code ([setCode]).
+  static const int minCodeLength = 6;
+  static const int maxCodeLength = 64;
+
+  /// After a wrong code, that client's attempts are refused for this long.
+  @visibleForTesting
+  Duration wrongCodeDelay = const Duration(seconds: 1);
+
+  /// How long a client is locked out after [maxWrongCodes] wrong attempts.
+  @visibleForTesting
+  Duration lockoutDelay = const Duration(seconds: 30);
+
+  String? _code;
+  String? _customCode;
+  bool _requireCode = true;
+  bool _localOnly = false;
+  final List<String> _sessions = [];
+  final Map<String, _Attempts> _attempts = {};
+  int _wrongCodesForCode = 0;
   List<NetworkLog> Function()? _getLogs;
   VoidCallback? _onChanged;
   DateTime? _lastRestart;
@@ -39,6 +81,74 @@ class WatcherWebServer {
   String? get lastError => _lastError;
   bool get isLoopback => _url != null && _url!.contains('://127.0.0.1');
 
+  /// The code a browser must enter, or `null` while stopped. Unless a custom
+  /// one is set with [setCode], it is 6 random digits: new on every [start],
+  /// kept across an automatic rebind, and replaced after
+  /// [maxWrongCodesPerCode] wrong attempts (then [start]'s `onChanged` fires).
+  String? get pairingCode => _code;
+
+  /// Whether the server listens only on 127.0.0.1. See [setLocalOnly].
+  bool get localOnly => _localOnly;
+
+  /// With [on], the next [start] binds to 127.0.0.1 instead of the Wi-Fi
+  /// address, so nothing is reachable over the network; the developer uses
+  /// `adb forward tcp:<port> tcp:<port>` and opens `http://localhost:<port>`.
+  /// A running server must be restarted for this to take effect.
+  void setLocalOnly(bool on) => _localOnly = on;
+
+  /// Whether a browser must enter [pairingCode]. See [setRequiresCode].
+  bool get requiresCode => _requireCode;
+
+  /// Whether [pairingCode] was set with [setCode] instead of being random.
+  bool get hasCustomCode => _customCode != null;
+
+  /// Why [code] can't be used as a custom code, or `null` if it can.
+  static String? validateCode(String code) {
+    if (code.length < minCodeLength) {
+      return 'Use at least $minCodeLength characters.';
+    }
+    if (code.length > maxCodeLength) {
+      return 'Use at most $maxCodeLength characters.';
+    }
+    if (code.contains(RegExp(r'\s'))) return 'Spaces are not allowed.';
+    return null;
+  }
+
+  /// Uses [code] instead of a random one, for this and later starts, or goes
+  /// back to random codes when it is `null`. Paired browsers must pair again.
+  /// Throws [ArgumentError] when [validateCode] rejects [code].
+  void setCode(String? code) {
+    if (code != null) {
+      final problem = validateCode(code);
+      if (problem != null) throw ArgumentError.value(code, 'code', problem);
+    }
+    _customCode = code;
+    if (_code == null) return; // Stopped: start() picks it up.
+    _sessions.clear();
+    _attempts.clear();
+    _wrongCodesForCode = 0;
+    _code = code ?? _newCode();
+  }
+
+  /// When [on] is `false`, any browser that can reach the server sees the
+  /// logs, which include auth headers and bodies. Kept across starts.
+  ///
+  /// Only debug builds can turn the code off: outside [kDebugMode] this does
+  /// nothing for `false` and returns `false`.
+  bool setRequiresCode(bool on) {
+    if (!on && !_allowCodeOff) return false;
+    _requireCode = on;
+    return true;
+  }
+
+  /// Whether [setRequiresCode] may turn the code off: debug builds only.
+  bool get canTurnOffCode => _allowCodeOff;
+  bool _allowCodeOff = kDebugMode;
+
+  /// Lets tests act like a profile or release build.
+  @visibleForTesting
+  set debugAllowCodeOff(bool value) => _allowCodeOff = value;
+
   /// The live server, so tests can kill it the way a dropped socket does.
   @visibleForTesting
   HttpServer? get debugServer => _server;
@@ -55,12 +165,16 @@ class WatcherWebServer {
     _onChanged = onChanged;
     _lastError = null;
     _lastRestart = null;
+    // New per start; a rebind in _recover keeps the code and the paired
+    // browsers, so an open viewer reconnects without pairing again.
+    _resetPairing();
+    _code = _customCode ?? _newCode();
     try {
-      _ip = await _localIp();
+      _ip = await _bindAddress();
       final server = await _bindFreePort(_ip!);
       if (server == null) {
         _lastError =
-            'No free port available in range $basePort-${basePort + portRange - 1}';
+            'No free port available in range $firstPort-${firstPort + portRange - 1}';
         return null;
       }
       _attach(server);
@@ -72,14 +186,14 @@ class WatcherWebServer {
   }
 
   /// Tries [preferred] first (the port a restarted server had), then
-  /// [basePort] and each subsequent port, returning the first one that binds
+  /// [firstPort] and each subsequent port, returning the first one that binds
   /// successfully. `shared: false` ensures each app instance gets its own
   /// socket instead of silently sharing the same port. Returns null if every
   /// port in the range is taken.
   Future<HttpServer?> _bindFreePort(String ip, {int? preferred}) async {
     final ports = [
       if (preferred != null) preferred,
-      for (var p = basePort; p < basePort + portRange; p++)
+      for (var p = firstPort; p < firstPort + portRange; p++)
         if (p != preferred) p,
     ];
     for (final p in ports) {
@@ -101,6 +215,7 @@ class WatcherWebServer {
     _server = null;
     _url = null;
     _port = null;
+    _resetPairing();
     await server?.close(force: true);
   }
 
@@ -143,7 +258,7 @@ class WatcherWebServer {
       if (superseded()) return;
       // A Wi-Fi drop often hands the device a new address; binding to the old
       // one would fail on every port.
-      _ip = await _localIp();
+      _ip = await _bindAddress();
       if (superseded()) return;
       server = await _bindFreePort(_ip!, preferred: port);
     }
@@ -162,36 +277,239 @@ class WatcherWebServer {
     _onChanged?.call();
   }
 
+  static final Random _random = Random.secure();
+
+  /// Six random digits, zero-padded.
+  static String _newCode() =>
+      _random.nextInt(1000000).toString().padLeft(6, '0');
+
+  /// A 128-bit random session token, base64url without padding.
+  static String _newToken() => base64Url
+      .encode(List<int>.generate(16, (_) => _random.nextInt(256)))
+      .replaceAll('=', '');
+
+  /// Compares in time that depends only on the length, which is public.
+  static bool _matches(String given, String expected) {
+    if (given.length != expected.length) return false;
+    var diff = 0;
+    for (var i = 0; i < given.length; i++) {
+      diff |= given.codeUnitAt(i) ^ expected.codeUnitAt(i);
+    }
+    return diff == 0;
+  }
+
+  void _resetPairing() {
+    _code = null;
+    _sessions.clear();
+    _attempts.clear();
+    _wrongCodesForCode = 0;
+  }
+
+  /// Rejects requests addressed to another host name. Without this, a website
+  /// could point its own domain at the phone (DNS rebinding) and read the
+  /// logs from the developer's browser as a same-origin page.
+  bool _hostAllowed(HttpRequest req) {
+    final host = req.headers.value(HttpHeaders.hostHeader)?.toLowerCase();
+    if (host == null) return false;
+    if (host == '$_ip:$_port') return true;
+    // Loopback names can't be produced by rebinding (the attacker's domain is
+    // the Host), so allow any port: `adb forward` may use another local port.
+    final colon = host.lastIndexOf(':');
+    final name = colon == -1 ? host : host.substring(0, colon);
+    return name == 'localhost' || name == '127.0.0.1';
+  }
+
+  /// Browsers send Origin on form posts. A post from another site (a page
+  /// trying codes, or locking the developer out) is refused. Clients that
+  /// send no Origin, like curl, are allowed.
+  bool _originAllowed(HttpRequest req) {
+    final origin = req.headers.value('origin');
+    if (origin == null) return true;
+    return origin.toLowerCase() ==
+        'http://${req.headers.value(HttpHeaders.hostHeader)?.toLowerCase()}';
+  }
+
+  /// Per port, because browsers share cookies across ports of the same host:
+  /// two apps on one phone must not overwrite each other's session.
+  String get _cookieName => 'hw_session_$_port';
+
+  bool _isPaired(HttpRequest req) {
+    if (!_requireCode) return true;
+    var paired = false;
+    for (final c in req.cookies) {
+      if (c.name != _cookieName) continue;
+      // Check every session, so the time taken doesn't depend on which matched.
+      for (final s in _sessions) {
+        if (_matches(c.value, s)) paired = true;
+      }
+    }
+    return paired;
+  }
+
   Future<void> _handle(HttpRequest req) async {
     try {
-      if (req.uri.path == '/api/logs') {
-        final data = (_getLogs?.call() ?? const <NetworkLog>[])
-            .map((l) => {
-                  'method': l.method,
-                  'url': l.url,
-                  'statusCode': l.statusCode,
-                  'pending': l.pending,
-                  'durationMs': l.durationMs,
-                  'timestamp': l.timestamp.toIso8601String(),
-                  'requestHeaders': l.requestHeaders,
-                  'requestBody': l.requestBody?.toString(),
-                  'responseBody': l.responseBody,
-                })
-            .toList();
-        req.response
-          ..headers.contentType = ContentType.json
-          ..headers.add('Access-Control-Allow-Origin', '*')
-          ..write(jsonEncode(data));
+      final res = req.response;
+      res.headers.set(HttpHeaders.cacheControlHeader, 'no-store');
+      final path = req.uri.path;
+      if (!_hostAllowed(req)) {
+        res.statusCode = HttpStatus.notFound;
+      } else if (path == '/pair' && req.method == 'POST') {
+        await _pair(req);
+      } else if (path == '/api/logs') {
+        if (_isPaired(req)) {
+          res
+            ..headers.contentType = ContentType.json
+            ..write(jsonEncode(_logsJson()));
+        } else {
+          // The page reloads on this, which shows the pairing form.
+          res.statusCode = HttpStatus.unauthorized;
+        }
+      } else if (path == '/') {
+        res.headers.contentType = ContentType.html;
+        res.write(_isPaired(req) ? _html : _pairHtml(null));
       } else {
-        req.response
-          ..headers.contentType = ContentType.html
-          ..write(_html);
+        res.statusCode = HttpStatus.notFound;
       }
-      await req.response.close();
+      await res.close();
     } on IOException {
       // The client hung up mid-response. Nothing to answer; the server lives on.
     }
   }
+
+  Future<void> _pair(HttpRequest req) async {
+    final res = req.response..headers.contentType = ContentType.html;
+
+    if (!_requireCode) {
+      res
+        ..statusCode = HttpStatus.seeOther
+        ..headers.set(HttpHeaders.locationHeader, '/');
+      return;
+    }
+
+    if (!_originAllowed(req)) {
+      res.statusCode = HttpStatus.forbidden;
+      return;
+    }
+
+    final client = req.connectionInfo?.remoteAddress.address ?? '';
+    final now = DateTime.now();
+    final locked = _attempts[client]?.lockedUntil;
+    if (locked != null && now.isBefore(locked)) {
+      res
+        ..statusCode = HttpStatus.tooManyRequests
+        ..write(_pairHtml('Too many attempts. Wait a moment and try again.'));
+      return;
+    }
+
+    // A short form field; anything much bigger isn't a real attempt.
+    final bytes = <int>[];
+    await for (final chunk in req) {
+      bytes.addAll(chunk);
+      if (bytes.length > 256) break;
+    }
+    String given = '';
+    try {
+      given = Uri.splitQueryString(utf8.decode(bytes, allowMalformed: true))['code']
+              ?.replaceAll(RegExp(r'\s'), '') ??
+          '';
+    } on FormatException {
+      // Treated as a wrong code below.
+    }
+
+    final code = _code;
+    if (code != null && _matches(given, code)) {
+      _attempts.remove(client);
+      final token = _newToken();
+      _sessions.add(token);
+      res
+        ..statusCode = HttpStatus.seeOther
+        ..headers.set(HttpHeaders.locationHeader, '/')
+        // HttpOnly: page scripts can't read it. SameSite=Strict: other sites
+        // can't make requests that carry it.
+        ..headers.add(HttpHeaders.setCookieHeader,
+            '$_cookieName=$token; Path=/; HttpOnly; SameSite=Strict');
+      return;
+    }
+
+    // Keep the table small: forget clients whose lock has run out.
+    if (_attempts.length > 256) {
+      _attempts.removeWhere((_, a) => !a.lockedUntil.isAfter(now));
+    }
+    final attempts = _attempts.putIfAbsent(client, () => _Attempts(now));
+    attempts
+      ..wrong += 1
+      ..lockedUntil = now.add(wrongCodeDelay);
+    _wrongCodesForCode++;
+    var message = 'Wrong code. Check the code on the phone and try again.';
+    if (attempts.wrong >= maxWrongCodes) {
+      attempts
+        ..wrong = 0
+        ..lockedUntil = now.add(lockoutDelay);
+      message = 'Too many wrong codes. Try again in '
+          '${lockoutDelay.inSeconds} seconds.';
+    }
+    if (_customCode == null && _wrongCodesForCode >= maxWrongCodesPerCode) {
+      // Many wrong codes overall (several devices guessing): replace it.
+      _wrongCodesForCode = 0;
+      _code = _newCode();
+      message = 'Too many wrong codes, so the phone now shows a new one.';
+      _onChanged?.call();
+    }
+    res
+      ..statusCode = HttpStatus.unauthorized
+      ..write(_pairHtml(message));
+  }
+
+  List<Map<String, Object?>> _logsJson() =>
+      (_getLogs?.call() ?? const <NetworkLog>[])
+          .map((l) => {
+                'method': l.method,
+                'url': l.url,
+                'statusCode': l.statusCode,
+                'pending': l.pending,
+                'durationMs': l.durationMs,
+                'timestamp': l.timestamp.toIso8601String(),
+                'requestHeaders': l.requestHeaders,
+                'requestBody': l.requestBody?.toString(),
+                'responseBody': l.responseBody,
+              })
+          .toList();
+
+  /// The page an unpaired browser gets. [error] comes only from this file,
+  /// never from the request, so it is safe to put in the HTML as is.
+  String _pairHtml(String? error) => '''<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HTTP Watcher</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0d0d1a;color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px}
+form{background:#1a1a2e;border:1px solid #2a2a3e;border-radius:14px;padding:28px 24px;width:100%;max-width:360px;text-align:center}
+h1{font-size:17px;font-weight:600;margin-bottom:8px}
+p{color:#9a9ab0;font-size:13px;line-height:1.5;margin-bottom:20px}
+input{width:100%;background:#0d0d1a;border:1px solid #3a3a52;border-radius:10px;color:#69f0ae;font:600 28px/1 ui-monospace,Menlo,Consolas,monospace;letter-spacing:10px;text-align:center;padding:14px 0 14px 10px}
+input.custom{font-size:20px;letter-spacing:2px;padding:14px 10px}
+input:focus{outline:none;border-color:#69f0ae}
+button{margin-top:16px;width:100%;background:#69f0ae;color:#0d0d1a;border:0;border-radius:10px;font-size:15px;font-weight:600;padding:12px;cursor:pointer}
+.err{color:#ff8a80;font-size:13px;margin:14px 0 0}
+</style>
+</head>
+<body>
+<form method="post" action="/pair">
+<h1>HTTP Watcher</h1>
+${_customCode == null ? '''<p>Enter the 6-digit code shown on the phone in <b>Network Inspector &rarr; &#8942; &rarr; Web Viewer</b>, or in the debug console.</p>
+<input name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9 ]*" maxlength="7" required autofocus>''' : '''<p>Enter the Web Viewer code set in the app. It is shown on the phone in <b>Network Inspector &rarr; &#8942; &rarr; Web Viewer</b>.</p>
+<input name="code" type="password" class="custom" autocomplete="current-password" maxlength="$maxCodeLength" required autofocus>'''}
+<button type="submit">Open logs</button>
+${error == null ? '' : '<p class="err">$error</p>'}
+</form>
+</body>
+</html>''';
+
+  Future<String> _bindAddress() async =>
+      _localOnly ? '127.0.0.1' : await _localIp();
 
   Future<String> _localIp() async {
     try {
@@ -199,12 +517,39 @@ class WatcherWebServer {
         type: InternetAddressType.IPv4,
         includeLinkLocal: false,
       );
-      for (final iface in interfaces) {
-        for (final addr in iface.addresses) {
-          if (!addr.isLoopback) return addr.address;
-        }
-      }
-    } catch (_) {}
+      return pickAddress([
+        for (final iface in interfaces)
+          for (final addr in iface.addresses)
+            if (!addr.isLoopback) (name: iface.name, address: addr.address),
+      ]);
+    } catch (_) {
+      return '127.0.0.1';
+    }
+  }
+
+  // Interfaces that face the local network (Wi-Fi, Ethernet, hotspot).
+  static final _lanInterface = RegExp(
+    r'^(wlan|swlan|wifi|wi-fi|wl|ap|en|eth|ethernet)',
+    caseSensitive: false,
+  );
+
+  // Mobile data, VPN and tunnel interfaces. Binding there could expose the
+  // viewer to the carrier's network or VPN peers, so they are never used.
+  static final _nonLanInterface = RegExp(
+    r'^(rmnet|ccmni|pdp|v4-|clat|wwan|tun|ppp|ipsec|utun|dummy|seth|qmi)',
+    caseSensitive: false,
+  );
+
+  /// Picks the address to listen on: a Wi-Fi/Ethernet interface first, then
+  /// any other interface that is not mobile data or a VPN, else 127.0.0.1.
+  @visibleForTesting
+  static String pickAddress(List<({String name, String address})> candidates) {
+    for (final c in candidates) {
+      if (_lanInterface.hasMatch(c.name)) return c.address;
+    }
+    for (final c in candidates) {
+      if (!_nonLanInterface.hasMatch(c.name)) return c.address;
+    }
     return '127.0.0.1';
   }
 
@@ -356,7 +701,7 @@ function renderT(){
     var l=logs[i],url=l.url||'',path=url,host='',idx=all.indexOf(l);
     try{var u=new URL(url);path=u.pathname+u.search;host=u.host;}catch(e){}
     t+='<tr onclick="show('+idx+')">';
-    t+='<td><span class="'+mc(l.method)+'">'+l.method+'</span></td>';
+    t+='<td><span class="'+mc(l.method)+'">'+esc(l.method)+'</span></td>';
     t+='<td><div class="path">'+esc(path)+'</div><div class="host">'+esc(host)+'</div></td>';
     if(l.pending){
       t+='<td><span class="spin"></span></td>';
@@ -402,11 +747,18 @@ function closeM(){document.getElementById('modal').classList.remove('open');}
 document.getElementById('modal').addEventListener('click',function(e){if(e.target===this)closeM();});
 
 async function poll(){
-  try{var r=await fetch('/api/logs');var d=await r.json();all=d;applyF();document.getElementById('dot').className='';}
+  try{var r=await fetch('/api/logs');if(r.status===401){location.replace('/');return;}var d=await r.json();all=d;applyF();document.getElementById('dot').className='';}
   catch(e){document.getElementById('dot').className='off';}
 }
 poll();setInterval(poll,3000);
 </script>
 </body>
 </html>''';
+}
+
+/// Wrong-code bookkeeping for one client address.
+class _Attempts {
+  _Attempts(this.lockedUntil);
+  int wrong = 0;
+  DateTime lockedUntil;
 }

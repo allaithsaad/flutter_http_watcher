@@ -51,6 +51,22 @@ class HttpWatcherOverlay extends StatefulWidget {
   /// The URL is printed to the debug console. Defaults to `false`.
   final bool autoStartWebServer;
 
+  /// A fixed code for the Web Viewer (4–64 characters, no spaces) instead of
+  /// a random 6-digit one each start. Can also be changed on the phone in
+  /// **⋮ → Web Viewer**. An invalid value is ignored with a debug message.
+  final String? webServerCode;
+
+  /// Whether a browser must enter the code before it sees the logs. Defaults
+  /// to `true`. With `false`, anyone on the same network can read every
+  /// logged header and body, including auth tokens.
+  final bool webServerRequiresCode;
+
+  /// Listen only on this device (127.0.0.1) instead of the Wi-Fi address, so
+  /// the logs never cross the network. Open them from a computer over USB:
+  /// `adb forward tcp:9742 tcp:9742`, then `http://localhost:9742`. Defaults
+  /// to `false`. Can also be switched on the phone in **⋮ → Web Viewer**.
+  final bool webServerLocalOnly;
+
   const HttpWatcherOverlay({
     super.key,
     required this.child,
@@ -58,6 +74,9 @@ class HttpWatcherOverlay extends StatefulWidget {
     this.show = true,
     this.icon,
     this.autoStartWebServer = false,
+    this.webServerCode,
+    this.webServerRequiresCode = true,
+    this.webServerLocalOnly = false,
   });
 
   @override
@@ -72,13 +91,65 @@ class _HttpWatcherOverlayState extends State<HttpWatcherOverlay> {
   @override
   void initState() {
     super.initState();
-    HttpWatcherLogger.instance.addListener(_refresh);
+    // Listen only while the button is shown: a hidden overlay (e.g. `show:
+    // kDebugMode` in release) then keeps the logger's connectivity check off.
+    if (widget.show) HttpWatcherLogger.instance.addListener(_refresh);
+    _applyWebServerCode();
+    _applyWebServerRequiresCode();
+    _applyWebServerLocalOnly();
+    deleteWatcherExports();
     _maybeAutoStartWebServer();
+  }
+
+  void _applyWebServerLocalOnly() {
+    if (widget.webServerLocalOnly ==
+        HttpWatcherLogger.instance.webServerLocalOnly) {
+      return;
+    }
+    HttpWatcherLogger.instance.setWebServerLocalOnly(widget.webServerLocalOnly);
+  }
+
+  // Applied on mount and when the parameter changes, so a change made on the
+  // phone in ⋮ → Web Viewer isn't undone by every rebuild.
+  void _applyWebServerCode() {
+    final code = widget.webServerCode;
+    final problem =
+        code == null ? null : HttpWatcherLogger.validateWebServerCode(code);
+    if (problem != null) {
+      debugPrint('[HttpWatcher] webServerCode ignored: $problem');
+      return;
+    }
+    if (code == null && !HttpWatcherLogger.instance.webServerHasCustomCode) {
+      return;
+    }
+    HttpWatcherLogger.instance.setWebServerCode(code);
+  }
+
+  void _applyWebServerRequiresCode() {
+    if (widget.webServerRequiresCode ==
+        HttpWatcherLogger.instance.webServerRequiresCode) {
+      return;
+    }
+    HttpWatcherLogger.instance
+        .setWebServerRequiresCode(widget.webServerRequiresCode);
   }
 
   @override
   void didUpdateWidget(HttpWatcherOverlay oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.webServerCode != oldWidget.webServerCode) _applyWebServerCode();
+    if (widget.webServerRequiresCode != oldWidget.webServerRequiresCode) {
+      _applyWebServerRequiresCode();
+    }
+    if (widget.webServerLocalOnly != oldWidget.webServerLocalOnly) {
+      _applyWebServerLocalOnly();
+    }
+    if (widget.show != oldWidget.show) {
+      final logger = HttpWatcherLogger.instance;
+      widget.show
+          ? logger.addListener(_refresh)
+          : logger.removeListener(_refresh);
+    }
     // Only react to the option being switched on (e.g. by a hot reload), so a
     // server the developer stopped by hand is not restarted on every rebuild.
     final wasOn = oldWidget.autoStartWebServer && oldWidget.show;
@@ -90,21 +161,13 @@ class _HttpWatcherOverlayState extends State<HttpWatcherOverlay> {
     if (!widget.autoStartWebServer || !widget.show) return;
     final logger = HttpWatcherLogger.instance;
     if (logger.webServerRunning) return;
-    final url = await logger.startWebServer();
-    if (url == null) {
-      debugPrint('[HttpWatcher] Web Viewer failed to start: '
-          '${logger.webServerLastError ?? 'unknown error'}');
-    } else if (logger.webServerIsLoopback) {
-      debugPrint('[HttpWatcher] Web Viewer running at $url '
-          '(loopback only — not reachable from other devices)');
-    } else {
-      debugPrint('[HttpWatcher] Web Viewer running at $url');
-    }
+    // startWebServer prints the URL and code to the debug console.
+    await logger.startWebServer();
   }
 
   @override
   void dispose() {
-    HttpWatcherLogger.instance.removeListener(_refresh);
+    if (widget.show) HttpWatcherLogger.instance.removeListener(_refresh);
     super.dispose();
   }
 

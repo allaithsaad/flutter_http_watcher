@@ -304,9 +304,62 @@ Open via **⋮ → Stats**. Shows:
 Start a local HTTP server on the device and open the logs in any browser on the **same WiFi network** — useful for viewing on a laptop while the app runs on a phone.
 
 1. Tap **⋮ → Web Viewer**
-2. The server starts and a URL appears (e.g. `http://192.168.1.5:9742`)
-3. Open that URL in any browser on the same WiFi
+2. The server starts and shows a URL (e.g. `http://192.168.1.5:9742`) and a 6-digit pairing code. Both are also printed to the debug console
+3. Open the URL in any browser on the same WiFi and enter the code
 4. The page updates every 3 seconds with new requests
+
+The logs contain auth tokens and full request/response bodies, so each browser
+has to enter the code once before it sees anything. It then stays paired until
+the app restarts or the server is stopped. A new code is made each time the
+server starts. Each device trying codes gets one try per second, and after 5
+wrong codes in a row it is locked out for 30 seconds; other devices, including
+yours, are not affected. After 50 wrong codes overall the phone shows a new
+code. If the server restarts itself after a dropped connection, it keeps the
+code and paired browsers, so an open page reconnects.
+
+The server answers only requests addressed to the phone's IP, `localhost` or
+`127.0.0.1`, which stops websites from reaching it through DNS rebinding, and
+refuses codes posted from other websites. It listens on the Wi-Fi or Ethernet
+address, never on mobile data or a VPN.
+
+**Over USB only.** The Web Viewer uses plain HTTP, so someone who can capture
+or redirect traffic on the same Wi-Fi could read the logs and the code. On a
+network you don't trust (café, shared office), switch on **This device only
+(USB)** in **⋮ → Web Viewer**, or pass `webServerLocalOnly: true`. The server
+then listens only on the phone itself. Connect it by USB and run:
+
+```sh
+adb forward tcp:9742 tcp:9742   # use the port shown on the phone
+```
+
+then open `http://localhost:9742` on the computer.
+
+**Changing or removing the code.** In **⋮ → Web Viewer** on the phone, tap
+**Change code** to set your own (6–64 characters, no spaces), **Use random
+code** to go back, or turn off **Require code** (debug builds only). These
+last until the app restarts. To set them from code instead:
+
+```dart
+HttpWatcherOverlay(
+  navigatorKey: navigatorKey,
+  webServerCode: 'my-team-code',   // fixed code instead of a random one
+  // webServerRequiresCode: false, // no code at all — see the warning below
+  // webServerLocalOnly: true,     // USB only, via adb forward
+  child: child!,
+)
+
+// or at runtime:
+HttpWatcherLogger.instance.setWebServerCode('my-team-code'); // null = random
+HttpWatcherLogger.instance.setWebServerRequiresCode(false);
+```
+
+A custom code is never replaced automatically, so pick one that is hard to
+guess. Changing the code signs out paired browsers.
+
+> **Warning:** with the code turned off, anyone on the same network can open
+> the URL and read every logged header and body, including auth tokens. Only
+> do this on a network you trust. The code can only be turned off in debug
+> builds; in profile and release builds it always stays on.
 
 The browser page includes:
 - Search bar — filter by URL, method, or status
@@ -319,6 +372,7 @@ The browser page includes:
 // Control programmatically:
 await HttpWatcherLogger.instance.startWebServer();
 print(HttpWatcherLogger.instance.webServerUrl); // http://192.168.x.x:9742
+print(HttpWatcherLogger.instance.webServerPairingCode); // e.g. 482913
 await HttpWatcherLogger.instance.stopWebServer();
 ```
 
@@ -335,8 +389,8 @@ HttpWatcherOverlay(
 )
 ```
 
-The URL is printed to the debug console
-(`[HttpWatcher] Web Viewer running at http://192.168.x.x:9742`) and a green
+The URL and code are printed to the debug console
+(`[HttpWatcher] Web Viewer running at http://192.168.x.x:9742 — pairing code 482913`) and a green
 icon appears on the floating button while the server runs. The option is
 ignored in profile and release builds, on Flutter web, and while `show` is
 `false`. If you stop the server from the inspector, it stays stopped until the
