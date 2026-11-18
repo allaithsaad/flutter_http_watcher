@@ -1,3 +1,10 @@
+## 1.5.1
+
+* Fix the `share_plus` lower bound: it is now `>=11.0.0`. Exports use `SharePlus.instance` and `ShareParams`, which don't exist in 10.x, so resolving the oldest allowed version failed to compile.
+* The **Change code** and **Use random code** buttons in the Web Viewer dialog are green, matching the inspector theme.
+* The package no longer ships the `doc/` screenshots and demo GIF (the README loads them from GitHub), so it downloads 89 KB instead of about 6 MB.
+* New README screenshots and demo, including the pairing-code dialog and the browser side of the Web Viewer.
+
 ## 1.5.0
 
 * **Security: the Web Viewer asks for a pairing code shown on the phone.** The server listens on the device's Wi-Fi address and the logs hold full headers and bodies (bearer tokens, session responses), so before this anyone on the same network could open `http://<phone-ip>:<port>` and read them. Now a browser that opens the URL gets a form asking for the 6-digit code shown in **⋮ → Web Viewer** (and printed to the debug console with the URL). The right code gives that browser a session cookie (`HttpOnly`, `SameSite=Strict`), so each browser pairs once; `/api/logs` answers `401` without it. Each start makes a new code and forgets paired browsers. After a wrong code, attempts are refused for a second, and 5 wrong codes in a row replace the code. An automatic restart after a dropped connection keeps the code and the paired browsers. New: `HttpWatcherLogger.webServerPairingCode`. The URL itself is unchanged and logged content is unchanged.
