@@ -313,12 +313,14 @@ class _InspectorListScreenState extends State<InspectorListScreen> {
             alignment: WrapAlignment.center,
             children: [
               TextButton.icon(
+                style: TextButton.styleFrom(foregroundColor: Colors.greenAccent),
                 icon: const Icon(Icons.edit_outlined, size: 16),
                 label: const Text('Change code'),
                 onPressed: () => _showChangeCodeDialog(context),
               ),
               if (logger.webServerHasCustomCode)
                 TextButton.icon(
+                  style: TextButton.styleFrom(foregroundColor: Colors.greenAccent),
                   icon: const Icon(Icons.casino_outlined, size: 16),
                   label: const Text('Use random code'),
                   onPressed: () => logger.setWebServerCode(null),

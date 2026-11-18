@@ -308,6 +308,11 @@ Start a local HTTP server on the device and open the logs in any browser on the 
 3. Open the URL in any browser on the same WiFi and enter the code
 4. The page updates every 3 seconds with new requests
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/allaithsaad/flutter_http_watcher/main/doc/web_pair.jpg" width="320" alt="Browser asking for the code shown on the phone"/>
+  <img src="https://raw.githubusercontent.com/allaithsaad/flutter_http_watcher/main/doc/web_viewer.jpg" width="480" alt="Web Viewer showing a request's details"/>
+</p>
+
 The logs contain auth tokens and full request/response bodies, so each browser
 has to enter the code once before it sees anything. It then stays paired until
 the app restarts or the server is stopped. A new code is made each time the
